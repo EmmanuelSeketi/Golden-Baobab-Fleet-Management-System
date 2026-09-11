@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   AlertTriangle, ArrowDownRight, ArrowUpRight, Bell, BookOpen, CalendarDays, Check, ChevronDown,
   ClipboardCheck, Clock3, FileBarChart, FileText, Fuel, Gauge, History, LayoutDashboard, Menu,
@@ -18,6 +18,19 @@ const navGroups = [
   { label: 'Assets', items: [{ label: 'Maintenance', icon: Wrench }, { label: 'Repairs', icon: ClipboardCheck }, { label: 'Calendar', icon: CalendarDays }] },
   { label: 'Governance', items: [{ label: 'Notifications', icon: Bell }, { label: 'Audit Log', icon: History }, { label: 'Settings', icon: Settings }] },
 ]
+
+const uiTranslations: Record<string, string> = {
+  'Fleet operations': '车队运营', 'Full operational access': '完整运营权限', 'All systems operational': '所有系统运行正常', 'Help centre': '帮助中心',
+  'Good morning, Thabo': '早上好，Thabo', 'Here is what is happening across the Golden Baobab fleet today.': '以下是今天 Golden Baobab 车队的运营情况。', 'Record hours': '记录工时',
+  'Active machines': '运行中的设备', 'Hours recorded today': '今日记录工时', 'Unbilled value': '未开票金额', 'Maintenance due': '待维护', 'fleet availability': '车队可用率', 'Across 24 machines': '覆盖 24 台设备', 'From 6 open periods': '来自 6 个未结算周期', '2 due within 48 hours': '2 台设备将在 48 小时内到期',
+  'Fleet utilisation': '车队利用率', 'Recorded operating hours · Last 7 days': '记录运营工时 · 最近 7 天', 'This week': '本周', 'Billable hours': '可计费工时', 'Non-billable hours': '不可计费工时', '486 total hours': '共 486 小时',
+  'Fleet status': '车队状态', 'Live equipment availability': '设备实时可用性', 'total assets': '资产总数', 'Operating': '运行中', 'Standby': '待机', 'Maintenance': '维护中', 'Off hire': '停租', 'View fleet': '查看车队',
+  'Maintenance watchlist': '维护关注列表', 'Next service events requiring attention': '需要关注的下次维护事件', 'See all': '查看全部', 'Recent activity': '最近活动', 'Latest changes across the system': '系统中的最新变更', 'Audit log': '审计日志', '2 items need your attention': '有 2 项需要关注', '1 meter validation exception and 1 contract expiring within 90 days.': '1 个仪表验证异常和 1 个将在 90 天内到期的合同。', 'Review items': '查看项目',
+  'Daily working hours': '每日工作工时', 'Capture one verified operational record for every machine on site.': '为现场每台设备记录一条已验证的运营记录。', 'Saved just now': '刚刚保存', 'Unsaved changes': '未保存的更改', 'Save all changes': '保存所有更改', 'In progress': '进行中', 'Machines': '设备', 'Recorded': '已记录', 'Total hours': '总工时', 'Exceptions': '异常', 'to review': '待审核', 'Start meter': '起始仪表', 'End meter': '结束仪表', 'Validation': '验证', 'Verified': '已验证', 'Needs review': '需要审核', 'Validation rules active': '验证规则已启用',
+  'Fleet register': '车队登记', '34 tracked machines, availability, utilisation and service intervals.': '34 台受追踪设备、可用性、利用率和维护周期。', 'Add machine': '添加设备', 'Search fleet register': '搜索车队登记', 'All types': '所有类型', 'All statuses': '所有状态', 'More filters': '更多筛选', 'Current site': '当前位置', 'Next service': '下次维护', 'Service due': '待维护', 'Due now': '立即到期',
+  'Customers & contracts': '客户与合同', 'Active customer agreements, effective-dated rates and deployed assets.': '有效客户协议、生效日期费率和已部署资产。', 'New contract': '新建合同', 'Active customers': '活跃客户', 'Active contracts': '有效合同', 'Expiring in 90 days': '90 天内到期', 'Review renewal terms': '查看续约条款', 'Contract register': '合同登记', 'Export register': '导出登记', 'Contract ref': '合同编号', 'Normal rate': '标准费率', 'Expiry': '到期日', 'Expiring soon': '即将到期',
+  'Billing & invoices': '账单与发票', 'Reports & analytics': '报告与分析', 'Maintenance planning': '维护计划', 'Audit trail': '审计轨迹', 'Open report': '打开报告', 'Build report': '生成报告', 'Overview': '总览', 'Daily Hours': '每日工时', 'Fleet': '车队', 'Operators': '操作员', 'Customers & Contracts': '客户与合同', 'Billing & Invoices': '账单与发票', 'Reports': '报告', 'Maintenance': '维护', 'Repairs': '维修', 'Calendar': '日历', 'Notifications': '通知', 'Audit Log': '审计日志', 'Settings': '设置', 'Workspace': '工作区', 'Commercial': '商务', 'Assets': '资产', 'Governance': '治理', 'Monday, 14 July 2025': '2025 年 7 月 14 日，星期一', 'Record hours': '记录工时', 'View fleet': '查看车队', 'This week': '本周', 'See all': '查看全部', 'Audit log': '审计日志', 'Review items': '查看项目', 'Good morning, Thabo': '早上好，Thabo', 'Operations / Daily log': '运营 / 每日记录', 'Assets / Fleet register': '资产 / 车队登记', 'Commercial / Customer master': '商务 / 客户主数据', 'Commercial / Revenue': '商务 / 收入', 'Insights / Reporting': '洞察 / 报告', 'Assets / Maintenance': '资产 / 维护', 'Governance / Compliance': '治理 / 合规'
+}
 
 const initialHours: HourRow[] = [
   { id: '1', machine: 'CAT 320 GC', code: 'GB-EX-001', operator: 'Mandla Ndlovu', project: 'Mokopane Solar Farm', start: 4281, end: 4289, status: 'verified' },
@@ -60,6 +73,28 @@ export default function Page() {
   const filteredHours = useMemo(() => hours.filter(row => [row.machine, row.code, row.operator, row.project].join(' ').toLowerCase().includes(query.toLowerCase())), [hours, query])
   const zhLabels: Record<string, string> = { Overview: '总览', 'Daily Hours': '每日工时', Fleet: '车队', Operators: '操作员', 'Customers & Contracts': '客户与合同', 'Billing & Invoices': '账单与发票', Reports: '报告', Maintenance: '维护', Repairs: '维修', Calendar: '日历', Notifications: '通知', 'Audit Log': '审计日志', Settings: '设置', Workspace: '工作区', Commercial: '商务', Assets: '资产', Governance: '治理' }
   const totalHours = hours.reduce((sum, row) => sum + Math.max(row.end - row.start, 0), 0)
+
+  useEffect(() => {
+    const originals = new WeakMap<Text, string>()
+    const translate = () => {
+      const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT)
+      let node: Node | null
+      while ((node = walker.nextNode())) {
+        const textNode = node as Text
+        const parent = textNode.parentElement
+        if (!parent || ['SCRIPT', 'STYLE', 'TEXTAREA', 'INPUT'].includes(parent.tagName)) continue
+        const raw = originals.get(textNode) || textNode.nodeValue || ''
+        originals.set(textNode, raw)
+        const leading = raw.match(/^\\s*/)?.[0] || ''
+        const trailing = raw.match(/\\s*$/)?.[0] || ''
+        const key = raw.trim()
+        if (!key) continue
+        textNode.nodeValue = language === 'zh' ? `${leading}${uiTranslations[key] || key}${trailing}` : raw
+      }
+    }
+    const refresh = window.setTimeout(translate, 80)
+    return () => window.clearTimeout(refresh)
+  }, [language, active])
 
   function updateMeter(id: string, key: 'start' | 'end', value: string) {
     setSaved(false)
