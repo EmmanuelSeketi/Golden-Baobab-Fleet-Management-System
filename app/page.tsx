@@ -56,7 +56,9 @@ export default function Page() {
   const [query, setQuery] = useState('')
   const [saved, setSaved] = useState(true)
   const [mobileNav, setMobileNav] = useState(false)
+  const [language, setLanguage] = useState<'en' | 'zh'>('en')
   const filteredHours = useMemo(() => hours.filter(row => [row.machine, row.code, row.operator, row.project].join(' ').toLowerCase().includes(query.toLowerCase())), [hours, query])
+  const zhLabels: Record<string, string> = { Overview: '总览', 'Daily Hours': '每日工时', Fleet: '车队', Operators: '操作员', 'Customers & Contracts': '客户与合同', 'Billing & Invoices': '账单与发票', Reports: '报告', Maintenance: '维护', Repairs: '维修', Calendar: '日历', Notifications: '通知', 'Audit Log': '审计日志', Settings: '设置', Workspace: '工作区', Commercial: '商务', Assets: '资产', Governance: '治理' }
   const totalHours = hours.reduce((sum, row) => sum + Math.max(row.end - row.start, 0), 0)
 
   function updateMeter(id: string, key: 'start' | 'end', value: string) {
@@ -66,13 +68,13 @@ export default function Page() {
 
   return <div className="app-shell">
     <aside className={`sidebar ${mobileNav ? 'open' : ''}`}>
-      <div className="brand"><div className="brand-mark">GB</div><div><strong>Golden Baobab</strong><span>Fleet operations</span></div><button className="mobile-close" onClick={() => setMobileNav(false)}><X size={18} /></button></div>
+      <div className="brand"><img className="brand-logo" src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/Golden%20Baobab%20Logo.PNG-feY7yBqBZci35dpQ1RqzakSO62Ya8F.png" alt="GBI Group logo" /><div><strong>GBI Group</strong><span>Fleet operations</span></div><button className="mobile-close" onClick={() => setMobileNav(false)}><X size={18} /></button></div>
       <div className="role-pill"><div className="avatar">OM</div><div><b>Operations Manager</b><span>Full operational access</span></div><ChevronDown size={14} /></div>
-      <nav>{navGroups.map(group => <div className="nav-group" key={group.label}><small>{group.label}</small>{group.items.map(item => <button key={item.label} className={active === item.label ? 'nav-item active' : 'nav-item'} onClick={() => { setActive(item.label as Module); setMobileNav(false) }}><item.icon size={17} /><span>{item.label}</span>{item.label === 'Notifications' && <em>3</em>}</button>)}</div>)}</nav>
+      <nav>{navGroups.map(group => <div className="nav-group" key={group.label}><small>{group.label}</small>{group.items.map(item => <button key={item.label} className={active === item.label ? 'nav-item active' : 'nav-item'} onClick={() => { setActive(item.label as Module); setMobileNav(false) }}><item.icon size={17} /><span>{language === 'zh' ? (zhLabels[item.label] || item.label) : item.label}</span>{item.label === 'Notifications' && <em>3</em>}</button>)}</div>)}</nav>
       <div className="sidebar-bottom"><div className="sync"><span className="online-dot" />All systems operational</div><button className="help"><CircleHelp size={16} /> Help centre</button></div>
     </aside>
     <main className="main-content">
-      <header className="topbar"><button className="menu-button" onClick={() => setMobileNav(true)}><Menu size={20} /></button><div className="breadcrumb"><span>Workspace</span><b>/</b><strong>{active}</strong></div><div className="top-actions"><div className="top-search"><Search size={16} /><input placeholder="Search fleet, people, sites..." aria-label="Search" /></div><button className="icon-button" aria-label="Notifications"><Bell size={18} /><i /></button><div className="top-avatar">OM</div></div></header>
+      <header className="topbar"><button className="menu-button" onClick={() => setMobileNav(true)}><Menu size={20} /></button><div className="breadcrumb"><span>{language === 'zh' ? '工作区' : 'Workspace'}</span><b>/</b><strong>{language === 'zh' ? (zhLabels[active] || active) : active}</strong></div><div className="top-actions"><div className="language-switcher" aria-label="Language selector"><button className={language === 'en' ? 'active' : ''} onClick={() => setLanguage('en')}>EN</button><button className={language === 'zh' ? 'active' : ''} onClick={() => setLanguage('zh')}>中文</button></div><div className="top-search"><Search size={16} /><input value={query} onChange={e => setQuery(e.target.value)} placeholder={language === 'zh' ? '搜索车队、人员、地点...' : 'Search fleet, people, sites...'} aria-label="Search" /></div><button className="icon-button" aria-label="Notifications"><Bell size={18} /><i /></button><div className="top-avatar">OM</div></div></header>
       <div className="page-wrap">
         {active === 'Overview' && <Overview setActive={setActive} />}
         {active === 'Daily Hours' && <DailyHours hours={filteredHours} query={query} setQuery={setQuery} updateMeter={updateMeter} totalHours={totalHours} saved={saved} setSaved={setSaved} />}

@@ -3,14 +3,14 @@ import type { Metadata, Viewport } from 'next'
 import './globals.css'
 
 export const metadata: Metadata = {
-  title: 'Golden Baobab | Fleet Operations',
+  title: 'GBI Group | Fleet Operations',
   description: 'Fleet operations, daily working hours, maintenance and billing control centre for Golden Baobab.',
   generator: 'v0.app',
 }
 
 export const viewport: Viewport = {
   colorScheme: 'light',
-  themeColor: '#202b31',
+  themeColor: '#009943',
   width: 'device-width',
   initialScale: 1,
 }
