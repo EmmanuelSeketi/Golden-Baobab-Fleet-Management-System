@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
+import { createClient } from '@/lib/supabase/client'
 import {
   AlertTriangle, ArrowDownRight, ArrowUpRight, Bell, BookOpen, CalendarDays, Check, ChevronDown,
   ClipboardCheck, Clock3, FileBarChart, FileText, Fuel, Gauge, History, LayoutDashboard, Menu,
@@ -8,7 +9,7 @@ import {
   Users, Wrench, X, CircleDollarSign, CircleHelp, CircleDot
 } from 'lucide-react'
 
-type Module = 'Overview' | 'Daily Hours' | 'Fleet' | 'Customers & Contracts' | 'Billing & Invoices' | 'Maintenance' | 'Reports' | 'Audit Log'
+type Module = 'Overview' | 'Daily Hours' | 'Fleet' | 'Operators' | 'Customers & Contracts' | 'Billing & Invoices' | 'Maintenance' | 'Reports' | 'Audit Log'
 
 type HourRow = { id: string; machine: string; code: string; operator: string; project: string; start: number; end: number; status: string; note?: string }
 
@@ -49,6 +50,13 @@ const fleet = [
   { machine: 'CAT 140K', code: 'GB-GR-003', type: 'Grader', site: 'Rustenburg Roads', state: 'Service due', hours: '3,307 h', next: 'Due now' },
 ]
 
+const operators = [
+  { name: 'Mandla Ndlovu', code: 'OP-001', phone: '+27 71 482 1902', licence: 'Code C · valid', project: 'Mokopane Solar Farm', status: 'Active', hours: '142.5 h' },
+  { name: 'Thabo Mokoena', code: 'OP-002', phone: '+27 82 314 8871', licence: 'Code C · valid', project: 'Mokopane Solar Farm', status: 'Active', hours: '136.0 h' },
+  { name: 'Sipho Dlamini', code: 'OP-003', phone: '+27 76 229 4401', licence: 'Code C · expires Aug 2026', project: 'Limpopo Aggregates', status: 'Active', hours: '128.0 h' },
+  { name: 'Lerato Molefe', code: 'OP-004', phone: '+27 79 654 2230', licence: 'Code C · valid', project: 'Rustenburg Roads', status: 'On leave', hours: '94.0 h' },
+]
+
 const contracts = [
   { customer: 'Mokopane Solar Farm', ref: 'MSF-24-018', machines: 4, rate: 'R 1,850 / h', expiry: '31 Dec 2026', state: 'Active' },
   { customer: 'Limpopo Aggregates', ref: 'LA-25-004', machines: 3, rate: 'R 2,100 / h', expiry: '30 Sep 2026', state: 'Expiring soon' },
@@ -65,6 +73,18 @@ function KpiCard({ label, value, sub, trend, icon: Icon, tone = 'gold' }: { labe
 
 export default function Page() {
   const [active, setActive] = useState<Module>('Overview')
+  const [user, setUser] = useState<unknown>(null)
+  const [authReady, setAuthReady] = useState(false)
+  const [supabase, setSupabase] = useState<ReturnType<typeof createClient> | null>(null)
+
+  useEffect(() => {
+    const client = createClient()
+    setSupabase(client)
+    client.auth.getUser().then(({ data }) => { setUser(data.user); setAuthReady(true) })
+  }, [])
+
+  if (!authReady || !supabase) return <div className="auth-loading">Loading secure workspace…</div>
+  if (!user) return <LoginScreen onLogin={setUser} supabase={supabase} />
   const [hours, setHours] = useState(initialHours)
   const [query, setQuery] = useState('')
   const [saved, setSaved] = useState(true)
@@ -114,6 +134,7 @@ export default function Page() {
         {active === 'Overview' && <Overview setActive={setActive} />}
         {active === 'Daily Hours' && <DailyHours hours={filteredHours} query={query} setQuery={setQuery} updateMeter={updateMeter} totalHours={totalHours} saved={saved} setSaved={setSaved} />}
         {active === 'Fleet' && <FleetView />}
+        {active === 'Operators' && <OperatorsView />}
         {active === 'Customers & Contracts' && <ContractsView />}
         {active === 'Billing & Invoices' && <BillingView />}
         {active === 'Maintenance' && <MaintenanceView />}
@@ -123,6 +144,23 @@ export default function Page() {
     </main>
   </div>
 }
+
+function LoginScreen({ onLogin, supabase }: { onLogin: (user: unknown) => void; supabase: ReturnType<typeof createClient> }) {
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [error, setError] = useState('')
+  const [loading, setLoading] = useState(false)
+  async function submit(event: React.FormEvent) {
+    event.preventDefault(); setLoading(true); setError('')
+    const { data, error: signInError } = await supabase.auth.signInWithPassword({ email, password })
+    if (signInError) setError(signInError.message === 'Invalid login credentials' ? 'Invalid email or password.' : 'Unable to sign in. Please check your details.')
+    else onLogin(data.user)
+    setLoading(false)
+  }
+  return <main className="login-shell"><section className="login-card"><img src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/Golden%20Baobab%20Logo.PNG-feY7yBqBZci35dpQ1RqzakSO62Ya8F.png" alt="GBI Group logo" /><span className="eyebrow">GBI Group · Fleet operations</span><h1>Welcome back</h1><p>Sign in to manage fleet operations, people, billing and compliance.</p><form onSubmit={submit}><label htmlFor="login-email">Email address</label><input id="login-email" type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="you@gbigroup.com" required /><label htmlFor="login-password">Password</label><input id="login-password" type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="Enter your password" required />{error && <div className="login-error">{error}</div>}<button className="button button-primary login-button" disabled={loading}>{loading ? 'Signing in…' : 'Sign in securely'}</button></form><small>Access is managed by your GBI Group administrator.</small></section></main>
+}
+
+function OperatorsView() { const [search, setSearch] = useState(''); const filtered = operators.filter(row => `${row.name} ${row.code} ${row.project}`.toLowerCase().includes(search.toLowerCase())); return <><PageHeading eyebrow="Workspace / People" title="Operators" description="Manage operator records, licences, assignments and working hours." action={<button className="button button-primary"><Plus size={16} /> Add operator</button>} /><div className="kpi-grid small"><KpiCard label="Active operators" value="18" sub="2 on leave" icon={Users} /><KpiCard label="Hours this period" value="1,248 h" sub="Across active projects" icon={Clock3} tone="blue" /><KpiCard label="Licence renewals" value="3" sub="Due within 90 days" icon={ShieldCheck} tone="red" /></div><div className="filter-row"><div className="toolbar-search"><Search size={16} /><input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search operators, codes or projects" /></div><button className="button button-secondary">All statuses <ChevronDown size={14} /></button><button className="button button-secondary"><SlidersHorizontal size={15} /> Filters</button></div><section className="panel table-panel"><div className="table-scroll"><table className="data-table"><thead><tr><th>Operator</th><th>Contact</th><th>Licence / certification</th><th>Current project</th><th>Hours</th><th>Status</th><th /></tr></thead><tbody>{filtered.map(row => <tr key={row.code}><td><div className="machine-cell"><div className="operator-avatar">{row.name.split(' ').map(part => part[0]).join('').slice(0,2)}</div><div><b>{row.name}</b><span>{row.code}</span></div></div></td><td>{row.phone}</td><td>{row.licence}</td><td>{row.project}</td><td><b>{row.hours}</b></td><td><StatusBadge tone={row.status === 'Active' ? 'green' : 'amber'}>{row.status}</StatusBadge></td><td><MoreHorizontal size={17} className="muted-icon" /></td></tr>)}</tbody></table></div><div className="table-footer"><span>Showing {filtered.length} operators</span><span><ShieldCheck size={15} /> Licence records are tracked</span></div></section></> }
 
 function PageHeading({ eyebrow, title, description, action }: { eyebrow: string; title: string; description: string; action?: React.ReactNode }) { return <div className="page-heading"><div><div className="eyebrow">{eyebrow}</div><h1>{title}</h1><p>{description}</p></div>{action}</div> }
 
