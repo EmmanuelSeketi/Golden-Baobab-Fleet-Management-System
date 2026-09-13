@@ -50,7 +50,9 @@ const fleet = [
   { machine: 'CAT 140K', code: 'GB-GR-003', type: 'Grader', site: 'Rustenburg Roads', state: 'Service due', hours: '3,307 h', next: 'Due now' },
 ]
 
-const operators = [
+type OperatorRow = { name: string; code: string; phone: string; licence: string; project: string; status: string; hours: string }
+
+const operators: OperatorRow[] = [
   { name: 'Mandla Ndlovu', code: 'OP-001', phone: '+27 71 482 1902', licence: 'Code C · valid', project: 'Mokopane Solar Farm', status: 'Active', hours: '142.5 h' },
   { name: 'Thabo Mokoena', code: 'OP-002', phone: '+27 82 314 8871', licence: 'Code C · valid', project: 'Mokopane Solar Farm', status: 'Active', hours: '136.0 h' },
   { name: 'Sipho Dlamini', code: 'OP-003', phone: '+27 76 229 4401', licence: 'Code C · expires Aug 2026', project: 'Limpopo Aggregates', status: 'Active', hours: '128.0 h' },
@@ -85,12 +87,20 @@ export default function Page() {
 
   const [hours, setHours] = useState(initialHours)
   const [query, setQuery] = useState('')
+  const [liveOperators, setLiveOperators] = useState<typeof operators>(operators)
   const [saved, setSaved] = useState(true)
   const [mobileNav, setMobileNav] = useState(false)
   const [language, setLanguage] = useState<'en' | 'zh'>('en')
   const filteredHours = useMemo(() => hours.filter(row => [row.machine, row.code, row.operator, row.project].join(' ').toLowerCase().includes(query.toLowerCase())), [hours, query])
   const zhLabels: Record<string, string> = { Overview: '总览', 'Daily Hours': '每日工时', Fleet: '车队', Operators: '操作员', 'Customers & Contracts': '客户与合同', 'Billing & Invoices': '账单与发票', Reports: '报告', Maintenance: '维护', Repairs: '维修', Calendar: '日历', Notifications: '通知', 'Audit Log': '审计日志', Settings: '设置', Workspace: '工作区', Commercial: '商务', Assets: '资产', Governance: '治理' }
   const totalHours = hours.reduce((sum, row) => sum + Math.max(row.end - row.start, 0), 0)
+
+  useEffect(() => {
+    if (!supabase || !user) return
+    supabase.from('operator').select('id,full_name,phone_number,licence_details,is_active').order('full_name').then(({ data }) => {
+      if (data?.length) setLiveOperators(data.map((row) => ({ name: row.full_name, code: row.id.slice(0, 8).toUpperCase(), phone: row.phone_number || '—', licence: row.licence_details || 'Not recorded', project: 'Unassigned', status: row.is_active ? 'Active' : 'Inactive', hours: '—' })))
+    })
+  }, [supabase, user])
 
   useEffect(() => {
     const originals = new WeakMap<Text, string>()
@@ -135,7 +145,7 @@ export default function Page() {
         {active === 'Overview' && <Overview setActive={setActive} />}
         {active === 'Daily Hours' && <DailyHours hours={filteredHours} query={query} setQuery={setQuery} updateMeter={updateMeter} totalHours={totalHours} saved={saved} setSaved={setSaved} />}
         {active === 'Fleet' && <FleetView />}
-        {active === 'Operators' && <OperatorsView />}
+        {active === 'Operators' && <OperatorsView operators={liveOperators} />}
         {active === 'Customers & Contracts' && <ContractsView />}
         {active === 'Billing & Invoices' && <BillingView />}
         {active === 'Maintenance' && <MaintenanceView />}
@@ -161,7 +171,7 @@ function LoginScreen({ onLogin, supabase }: { onLogin: (user: unknown) => void; 
   return <main className="login-shell"><section className="login-card"><img src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/Golden%20Baobab%20Logo.PNG-feY7yBqBZci35dpQ1RqzakSO62Ya8F.png" alt="GBI Group logo" /><span className="eyebrow">GBI Group · Fleet operations</span><h1>Welcome back</h1><p>Sign in to manage fleet operations, people, billing and compliance.</p><form onSubmit={submit}><label htmlFor="login-email">Email address</label><input id="login-email" type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="you@gbigroup.com" required /><label htmlFor="login-password">Password</label><input id="login-password" type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="Enter your password" required />{error && <div className="login-error">{error}</div>}<button className="button button-primary login-button" disabled={loading}>{loading ? 'Signing in…' : 'Sign in securely'}</button></form><small>Access is managed by your GBI Group administrator.</small></section></main>
 }
 
-function OperatorsView() { const [search, setSearch] = useState(''); const filtered = operators.filter(row => `${row.name} ${row.code} ${row.project}`.toLowerCase().includes(search.toLowerCase())); return <><PageHeading eyebrow="Workspace / People" title="Operators" description="Manage operator records, licences, assignments and working hours." action={<button className="button button-primary"><Plus size={16} /> Add operator</button>} /><div className="kpi-grid small"><KpiCard label="Active operators" value="18" sub="2 on leave" icon={Users} /><KpiCard label="Hours this period" value="1,248 h" sub="Across active projects" icon={Clock3} tone="blue" /><KpiCard label="Licence renewals" value="3" sub="Due within 90 days" icon={ShieldCheck} tone="red" /></div><div className="filter-row"><div className="toolbar-search"><Search size={16} /><input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search operators, codes or projects" /></div><button className="button button-secondary">All statuses <ChevronDown size={14} /></button><button className="button button-secondary"><SlidersHorizontal size={15} /> Filters</button></div><section className="panel table-panel"><div className="table-scroll"><table className="data-table"><thead><tr><th>Operator</th><th>Contact</th><th>Licence / certification</th><th>Current project</th><th>Hours</th><th>Status</th><th /></tr></thead><tbody>{filtered.map(row => <tr key={row.code}><td><div className="machine-cell"><div className="operator-avatar">{row.name.split(' ').map(part => part[0]).join('').slice(0,2)}</div><div><b>{row.name}</b><span>{row.code}</span></div></div></td><td>{row.phone}</td><td>{row.licence}</td><td>{row.project}</td><td><b>{row.hours}</b></td><td><StatusBadge tone={row.status === 'Active' ? 'green' : 'amber'}>{row.status}</StatusBadge></td><td><MoreHorizontal size={17} className="muted-icon" /></td></tr>)}</tbody></table></div><div className="table-footer"><span>Showing {filtered.length} operators</span><span><ShieldCheck size={15} /> Licence records are tracked</span></div></section></> }
+function OperatorsView({ operators }: { operators: OperatorRow[] }) { const [search, setSearch] = useState(''); const filtered = operators.filter(row => `${row.name} ${row.code} ${row.project}`.toLowerCase().includes(search.toLowerCase())); return <><PageHeading eyebrow="Workspace / People" title="Operators" description="Manage operator records, licences, assignments and working hours." action={<button className="button button-primary"><Plus size={16} /> Add operator</button>} /><div className="kpi-grid small"><KpiCard label="Active operators" value="18" sub="2 on leave" icon={Users} /><KpiCard label="Hours this period" value="1,248 h" sub="Across active projects" icon={Clock3} tone="blue" /><KpiCard label="Licence renewals" value="3" sub="Due within 90 days" icon={ShieldCheck} tone="red" /></div><div className="filter-row"><div className="toolbar-search"><Search size={16} /><input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search operators, codes or projects" /></div><button className="button button-secondary">All statuses <ChevronDown size={14} /></button><button className="button button-secondary"><SlidersHorizontal size={15} /> Filters</button></div><section className="panel table-panel"><div className="table-scroll"><table className="data-table"><thead><tr><th>Operator</th><th>Contact</th><th>Licence / certification</th><th>Current project</th><th>Hours</th><th>Status</th><th /></tr></thead><tbody>{filtered.map(row => <tr key={row.code}><td><div className="machine-cell"><div className="operator-avatar">{row.name.split(' ').map(part => part[0]).join('').slice(0,2)}</div><div><b>{row.name}</b><span>{row.code}</span></div></div></td><td>{row.phone}</td><td>{row.licence}</td><td>{row.project}</td><td><b>{row.hours}</b></td><td><StatusBadge tone={row.status === 'Active' ? 'green' : 'amber'}>{row.status}</StatusBadge></td><td><MoreHorizontal size={17} className="muted-icon" /></td></tr>)}</tbody></table></div><div className="table-footer"><span>Showing {filtered.length} operators</span><span><ShieldCheck size={15} /> Licence records are tracked</span></div></section></> }
 
 function PageHeading({ eyebrow, title, description, action }: { eyebrow: string; title: string; description: string; action?: React.ReactNode }) { return <div className="page-heading"><div><div className="eyebrow">{eyebrow}</div><h1>{title}</h1><p>{description}</p></div>{action}</div> }
 
