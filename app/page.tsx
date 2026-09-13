@@ -83,8 +83,6 @@ export default function Page() {
     client.auth.getUser().then(({ data }) => { setUser(data.user); setAuthReady(true) })
   }, [])
 
-  if (!authReady || !supabase) return <div className="auth-loading">Loading secure workspace…</div>
-  if (!user) return <LoginScreen onLogin={setUser} supabase={supabase} />
   const [hours, setHours] = useState(initialHours)
   const [query, setQuery] = useState('')
   const [saved, setSaved] = useState(true)
@@ -115,6 +113,9 @@ export default function Page() {
     const refresh = window.setTimeout(translate, 80)
     return () => window.clearTimeout(refresh)
   }, [language, active])
+
+  if (!authReady || !supabase) return <div className="auth-loading">Loading secure workspace…</div>
+  if (!user) return <LoginScreen onLogin={setUser} supabase={supabase} />
 
   function updateMeter(id: string, key: 'start' | 'end', value: string) {
     setSaved(false)
