@@ -43,12 +43,15 @@ export async function updateSession(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser()
 
-  if (
-    // if the user is not logged in and the app path, in this case, /protected, is accessed, redirect to the login page
-    request.nextUrl.pathname.startsWith('/protected') &&
-    !user
-  ) {
-    // no user, potentially respond by redirecting the user to the login page
+  const { pathname } = request.nextUrl
+  // Public paths that an unauthenticated visitor is allowed to reach.
+  const isPublic =
+    pathname.startsWith('/auth') || pathname.startsWith('/_next') || pathname === '/favicon.ico'
+
+  // Everything else is the protected workspace. This enforces auth at the
+  // edge/SSR layer, so direct-URL access without a session is redirected to
+  // login — not merely hidden in the client.
+  if (!user && !isPublic) {
     const url = request.nextUrl.clone()
     url.pathname = '/auth/login'
     return NextResponse.redirect(url)

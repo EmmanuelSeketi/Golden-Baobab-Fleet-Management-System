@@ -1,0 +1,73 @@
+// Role model + module access, kept in lockstep with rls_policies.sql so the UI
+// never offers a page the database would reject anyway. RLS remains the real
+// enforcement boundary; this only shapes what is shown and reachable client side.
+
+export type UserRole =
+  | 'administrator'
+  | 'operations_manager'
+  | 'management'
+  | 'accounts_billing'
+
+export type AppUser = {
+  id: string
+  full_name: string
+  role: UserRole
+  is_active: boolean
+}
+
+export type Module =
+  | 'Overview'
+  | 'Daily Hours'
+  | 'Fleet'
+  | 'Operators'
+  | 'Overtime'
+  | 'Customers & Contracts'
+  | 'Billing & Invoices'
+  | 'Reports'
+  | 'Maintenance'
+  | 'Repairs'
+  | 'Notifications'
+  | 'Audit Log'
+
+export const ROLE_LABEL: Record<UserRole, string> = {
+  administrator: 'Administrator',
+  operations_manager: 'Operations Manager',
+  management: 'Management',
+  accounts_billing: 'Accounts & Billing',
+}
+
+export const ROLE_ACCESS_SUMMARY: Record<UserRole, string> = {
+  administrator: 'Full system access',
+  operations_manager: 'Operations & fleet access',
+  management: 'Read-only, all areas',
+  accounts_billing: 'Commercial & billing access',
+}
+
+// Commercial tables (customer/contract/billing/invoice) exclude operations_manager.
+const COMMERCIAL_ROLES: UserRole[] = ['administrator', 'management', 'accounts_billing']
+// audit_log is admin + management only.
+const AUDIT_ROLES: UserRole[] = ['administrator', 'management']
+
+const MODULE_ROLES: Partial<Record<Module, UserRole[]>> = {
+  'Customers & Contracts': COMMERCIAL_ROLES,
+  'Billing & Invoices': COMMERCIAL_ROLES,
+  'Audit Log': AUDIT_ROLES,
+}
+
+export function canAccess(module: Module, role: UserRole): boolean {
+  const allowed = MODULE_ROLES[module]
+  return allowed ? allowed.includes(role) : true
+}
+
+export function initialsOf(name: string): string {
+  return name
+    .split(' ')
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() ?? '')
+    .join('')
+}
+
+export function firstNameOf(name: string): string {
+  return name.split(' ').filter(Boolean)[0] ?? name
+}
