@@ -113,3 +113,19 @@ const MAINTENANCE_STATUS_TONE: Record<string, Tone> = {
 export function maintenanceStatusTone(status: string): Tone {
   return MAINTENANCE_STATUS_TONE[status] ?? 'neutral'
 }
+
+export const OPERATOR_STATUS_LABEL: Record<string, string> = {
+  working: 'Working',
+  off: 'Off',
+  standby: 'Standby',
+}
+
+const OPERATOR_STATUS_TONE: Record<string, Tone> = {
+  working: 'green',
+  standby: 'amber',
+  off: 'neutral',
+}
+
+export function operatorStatusTone(status: string | null | undefined): Tone {
+  return OPERATOR_STATUS_TONE[status ?? ''] ?? 'neutral'
+}

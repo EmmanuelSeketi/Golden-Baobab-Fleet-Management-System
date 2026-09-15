@@ -252,3 +252,63 @@ export function MiniState({
   if (isEmpty) return <p className="mini-state">{emptyText}</p>
   return null
 }
+
+/**
+ * Confirmation dialog for destructive actions. Renders above the detail modal
+ * (higher z-index) so an operator/machine can be deleted straight from its
+ * profile. Never performs the action itself — the caller owns the mutation.
+ */
+export function ConfirmDialog({
+  open,
+  title,
+  message,
+  confirmLabel = 'Delete',
+  busy = false,
+  onConfirm,
+  onCancel,
+}: {
+  open: boolean
+  title: string
+  message: React.ReactNode
+  confirmLabel?: string
+  busy?: boolean
+  onConfirm: () => void
+  onCancel: () => void
+}) {
+  useEffect(() => {
+    if (!open) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !busy) onCancel()
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [open, busy, onCancel])
+
+  if (!open) return null
+
+  return (
+    <div className="confirm-overlay" role="presentation" onClick={() => !busy && onCancel()}>
+      <div
+        className="confirm-card"
+        role="alertdialog"
+        aria-modal="true"
+        aria-label={title}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="confirm-icon">
+          <AlertTriangle size={22} />
+        </div>
+        <h3>{title}</h3>
+        <div className="confirm-message">{message}</div>
+        <div className="confirm-actions">
+          <button className="button button-secondary" onClick={onCancel} disabled={busy}>
+            Cancel
+          </button>
+          <button className="button button-danger" onClick={onConfirm} disabled={busy}>
+            {busy ? 'Working…' : confirmLabel}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}

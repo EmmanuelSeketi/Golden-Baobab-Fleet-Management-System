@@ -1,12 +1,19 @@
 'use client'
 
-import { useMemo, useState } from 'react'
-import { AlertTriangle, Plus } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
+import { AlertTriangle, Pencil, Plus, Trash2, Truck } from 'lucide-react'
 import { useSupabase } from '@/lib/supabase/use-supabase'
 import { useQuery } from '@/lib/gbi/use-query'
-import { hours as fmtHours, shortDate } from '@/lib/gbi/format'
+import {
+  OPERATOR_STATUS_LABEL,
+  hours as fmtHours,
+  operatorStatusTone,
+  shortDate,
+  titleCase,
+} from '@/lib/gbi/format'
 import { canManageOps, type UserRole } from '@/lib/gbi/roles'
 import {
+  ConfirmDialog,
   DetailGrid,
   MiniState,
   Modal,
@@ -28,26 +35,63 @@ type Operator = {
   certifications: string | null
   notes: string | null
   is_active: boolean
+  status: string
+}
+
+type MachineLite = {
+  id: string
+  machine_number: string
+  machine_type: string
+  assigned_operator_id: string | null
 }
 
 const LIST_SELECT =
-  'id,full_name,nrc_number,phone_number,address,emergency_contact,employment_date,licence_details,certifications,notes,is_active'
+  'id,full_name,nrc_number,phone_number,address,emergency_contact,employment_date,licence_details,certifications,notes,is_active,status'
+
+const STATUS_OPTIONS = ['working', 'off', 'standby']
+
+const today = () => new Date().toISOString().slice(0, 10)
 
 export function OperatorsView({ role, userId }: { role: UserRole; userId: string }) {
   const supabase = useSupabase()
   const [query, setQuery] = useState('')
   const [selected, setSelected] = useState<Operator | null>(null)
-  const [adding, setAdding] = useState(false)
-  const canAdd = canManageOps(role)
+  const [formMode, setFormMode] = useState<'add' | 'edit' | null>(null)
+  const [deleting, setDeleting] = useState<Operator | null>(null)
+  const [deleteBusy, setDeleteBusy] = useState(false)
+  const [deleteError, setDeleteError] = useState('')
+  const canManage = canManageOps(role)
 
   const operators = useQuery<Operator[]>(
     () =>
-      supabase.from('operator').select(LIST_SELECT).order('full_name') as unknown as PromiseLike<{
-        data: Operator[] | null
-        error: unknown
-      }>,
+      supabase
+        .from('operator')
+        .select(LIST_SELECT)
+        .is('deleted_at', null)
+        .order('full_name') as unknown as PromiseLike<{ data: Operator[] | null; error: unknown }>,
     [],
   )
+
+  const machines = useQuery<MachineLite[]>(
+    () =>
+      supabase
+        .from('machine')
+        .select('id,machine_number,machine_type,assigned_operator_id')
+        .is('deleted_at', null)
+        .order('machine_number') as unknown as PromiseLike<{ data: MachineLite[] | null; error: unknown }>,
+    [],
+  )
+
+  const machineByOperator = useMemo(() => {
+    const map = new Map<string, MachineLite[]>()
+    for (const m of machines.data ?? []) {
+      if (!m.assigned_operator_id) continue
+      const arr = map.get(m.assigned_operator_id) ?? []
+      arr.push(m)
+      map.set(m.assigned_operator_id, arr)
+    }
+    return map
+  }, [machines.data])
 
   const rows = useMemo(() => {
     const all = operators.data ?? []
@@ -58,6 +102,51 @@ export function OperatorsView({ role, userId }: { role: UserRole; userId: string
     )
   }, [operators.data, query])
 
+  function reloadAll() {
+    operators.reload()
+    machines.reload()
+  }
+
+  function assignedFor(operatorId: string): MachineLite[] {
+    return machineByOperator.get(operatorId) ?? []
+  }
+
+  async function confirmDelete() {
+    if (!deleting) return
+    setDeleteBusy(true)
+    setDeleteError('')
+    const { error } = await supabase
+      .from('operator')
+      .update({ deleted_at: new Date().toISOString(), updated_by: userId, status: 'off' })
+      .eq('id', deleting.id)
+
+    if (!error) {
+      // Release any machine held by this operator and close open assignment history.
+      await supabase
+        .from('machine')
+        .update({ assigned_operator_id: null, updated_by: userId })
+        .eq('assigned_operator_id', deleting.id)
+      await supabase
+        .from('machine_assignment')
+        .update({ end_date: today() })
+        .eq('operator_id', deleting.id)
+        .is('end_date', null)
+    }
+
+    setDeleteBusy(false)
+    if (error) {
+      setDeleteError(
+        /permission|policy|rls|denied/i.test((error as { message?: string }).message ?? '')
+          ? 'You do not have permission to remove operators.'
+          : 'Could not remove this operator. Please try again.',
+      )
+      return
+    }
+    setDeleting(null)
+    setSelected(null)
+    reloadAll()
+  }
+
   return (
     <div className="page-wrap">
       <PageHeading
@@ -65,8 +154,14 @@ export function OperatorsView({ role, userId }: { role: UserRole; userId: string
         title="Operators"
         description="Machine operators, their credentials and current deployment. Operators do not have login accounts."
         action={
-          canAdd ? (
-            <button className="button button-primary" onClick={() => setAdding(true)}>
+          canManage ? (
+            <button
+              className="button button-primary"
+              onClick={() => {
+                setSelected(null)
+                setFormMode('add')
+              }}
+            >
               <Plus size={15} />
               Add Operator
             </button>
@@ -99,56 +194,101 @@ export function OperatorsView({ role, userId }: { role: UserRole; userId: string
                 <tr>
                   <th>Operator</th>
                   <th>NRC</th>
-                  <th>Phone</th>
+                  <th>Assigned machine</th>
                   <th>Employed</th>
                   <th>Status</th>
                 </tr>
               </thead>
               <tbody>
-                {rows.map((o) => (
-                  <tr key={o.id} className="clickable-row" onClick={() => setSelected(o)}>
-                    <td>
-                      <div className="machine-cell">
-                        <span className="operator-avatar">
-                          {o.full_name
-                            .split(' ')
-                            .slice(0, 2)
-                            .map((p) => p[0])
-                            .join('')
-                            .toUpperCase()}
-                        </span>
-                        <b>{o.full_name}</b>
-                      </div>
-                    </td>
-                    <td>{o.nrc_number ?? '—'}</td>
-                    <td>{o.phone_number ?? '—'}</td>
-                    <td>{shortDate(o.employment_date)}</td>
-                    <td>
-                      <StatusBadge tone={o.is_active ? 'green' : 'neutral'}>
-                        {o.is_active ? 'Active' : 'Inactive'}
-                      </StatusBadge>
-                    </td>
-                  </tr>
-                ))}
+                {rows.map((o) => {
+                  const assigned = assignedFor(o.id)
+                  return (
+                    <tr key={o.id} className="clickable-row" onClick={() => setSelected(o)}>
+                      <td>
+                        <div className="machine-cell">
+                          <span className="operator-avatar">
+                            {o.full_name
+                              .split(' ')
+                              .slice(0, 2)
+                              .map((p) => p[0])
+                              .join('')
+                              .toUpperCase()}
+                          </span>
+                          <b>{o.full_name}</b>
+                        </div>
+                      </td>
+                      <td>{o.nrc_number ?? '—'}</td>
+                      <td>
+                        {assigned.length > 0 ? (
+                          <span className="assign-chip">
+                            <Truck size={12} />
+                            {assigned.map((m) => m.machine_number).join(', ')}
+                          </span>
+                        ) : (
+                          '—'
+                        )}
+                      </td>
+                      <td>{shortDate(o.employment_date)}</td>
+                      <td>
+                        <StatusBadge tone={operatorStatusTone(o.status)}>
+                          {OPERATOR_STATUS_LABEL[o.status] ?? titleCase(o.status)}
+                        </StatusBadge>
+                      </td>
+                    </tr>
+                  )
+                })}
               </tbody>
             </table>
           </div>
         </ViewState>
       </div>
 
-      <OperatorModal operator={selected} onClose={() => setSelected(null)} />
+      <OperatorModal
+        operator={selected}
+        assigned={selected ? assignedFor(selected.id) : []}
+        canManage={canManage}
+        onEdit={() => setFormMode('edit')}
+        onDelete={() => setDeleting(selected)}
+        onClose={() => setSelected(null)}
+      />
 
-      {canAdd && (
-        <AddOperatorModal
-          open={adding}
+      {canManage && (
+        <OperatorFormModal
+          open={formMode !== null}
+          mode={formMode ?? 'add'}
+          operator={formMode === 'edit' ? selected : null}
           userId={userId}
-          onClose={() => setAdding(false)}
-          onCreated={() => {
-            setAdding(false)
-            operators.reload()
+          machines={machines.data ?? []}
+          currentMachineId={formMode === 'edit' && selected ? assignedFor(selected.id)[0]?.id ?? '' : ''}
+          onClose={() => setFormMode(null)}
+          onSaved={() => {
+            setFormMode(null)
+            setSelected(null)
+            reloadAll()
           }}
         />
       )}
+
+      <ConfirmDialog
+        open={deleting !== null}
+        title="Remove operator?"
+        confirmLabel="Remove operator"
+        busy={deleteBusy}
+        onCancel={() => {
+          if (deleteBusy) return
+          setDeleting(null)
+          setDeleteError('')
+        }}
+        onConfirm={confirmDelete}
+        message={
+          <>
+            <b>{deleting?.full_name}</b> will be archived (soft delete) and unassigned from any machine.
+            Their daily hours, overtime and assignment history are preserved and can be restored in the
+            database.
+            {deleteError && <span className="confirm-error">{deleteError}</span>}
+          </>
+        }
+      />
     </div>
   )
 }
@@ -167,7 +307,21 @@ type HourRow = {
   machine: { machine_number: string } | null
 }
 
-function OperatorModal({ operator, onClose }: { operator: Operator | null; onClose: () => void }) {
+function OperatorModal({
+  operator,
+  assigned,
+  canManage,
+  onEdit,
+  onDelete,
+  onClose,
+}: {
+  operator: Operator | null
+  assigned: MachineLite[]
+  canManage: boolean
+  onEdit: () => void
+  onDelete: () => void
+  onClose: () => void
+}) {
   const supabase = useSupabase()
 
   const assignments = useQuery<AssignmentRow[]>(
@@ -197,6 +351,7 @@ function OperatorModal({ operator, onClose }: { operator: Operator | null; onClo
   )
 
   const totalRecent = (recentHours.data ?? []).reduce((s, h) => s + Number(h.total_hours ?? 0), 0)
+  const assignedLabel = assigned.length > 0 ? assigned.map((m) => m.machine_number).join(', ') : '—'
 
   return (
     <Modal
@@ -207,9 +362,23 @@ function OperatorModal({ operator, onClose }: { operator: Operator | null; onClo
       subtitle={operator?.nrc_number ? `NRC ${operator.nrc_number}` : undefined}
       footer={
         operator ? (
-          <StatusBadge tone={operator.is_active ? 'green' : 'neutral'}>
-            {operator.is_active ? 'Active' : 'Inactive'}
-          </StatusBadge>
+          <div className="modal-foot-split">
+            <StatusBadge tone={operatorStatusTone(operator.status)}>
+              {OPERATOR_STATUS_LABEL[operator.status] ?? titleCase(operator.status)}
+            </StatusBadge>
+            {canManage && (
+              <div className="modal-foot-actions">
+                <button className="button button-secondary" onClick={onEdit}>
+                  <Pencil size={14} />
+                  Edit
+                </button>
+                <button className="button button-danger" onClick={onDelete}>
+                  <Trash2 size={14} />
+                  Delete
+                </button>
+              </div>
+            )}
+          </div>
         ) : null
       }
     >
@@ -217,6 +386,9 @@ function OperatorModal({ operator, onClose }: { operator: Operator | null; onClo
         <>
           <DetailGrid
             items={[
+              ['Status', OPERATOR_STATUS_LABEL[operator.status] ?? titleCase(operator.status)],
+              ['Assigned machine', assignedLabel],
+              ['Employment', operator.is_active ? 'Active' : 'Inactive'],
               ['Phone', operator.phone_number ?? '—'],
               ['Employment date', shortDate(operator.employment_date)],
               ['Address', operator.address ?? '—'],
@@ -271,38 +443,90 @@ function OperatorModal({ operator, onClose }: { operator: Operator | null; onClo
   )
 }
 
-function AddOperatorModal({
+function OperatorFormModal({
   open,
+  mode,
+  operator,
   userId,
+  machines,
+  currentMachineId,
   onClose,
-  onCreated,
+  onSaved,
 }: {
   open: boolean
+  mode: 'add' | 'edit'
+  operator: Operator | null
   userId: string
+  machines: MachineLite[]
+  currentMachineId: string
   onClose: () => void
-  onCreated: () => void
+  onSaved: () => void
 }) {
   const supabase = useSupabase()
   const [form, setForm] = useState<Record<string, string>>({})
   const [isActive, setIsActive] = useState(true)
+  const [status, setStatus] = useState('off')
+  const [machineId, setMachineId] = useState('')
   const [saving, setSaving] = useState(false)
   const [formError, setFormError] = useState('')
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
+
+  useEffect(() => {
+    if (!open) return
+    if (mode === 'edit' && operator) {
+      setForm({
+        full_name: operator.full_name ?? '',
+        nrc_number: operator.nrc_number ?? '',
+        phone_number: operator.phone_number ?? '',
+        address: operator.address ?? '',
+        emergency_contact: operator.emergency_contact ?? '',
+        employment_date: operator.employment_date ?? '',
+        licence_details: operator.licence_details ?? '',
+        certifications: operator.certifications ?? '',
+      })
+      setIsActive(operator.is_active)
+      setStatus(operator.status ?? 'off')
+      setMachineId(currentMachineId)
+    } else {
+      setForm({})
+      setIsActive(true)
+      setStatus('off')
+      setMachineId('')
+    }
+    setFieldErrors({})
+    setFormError('')
+  }, [open, mode, operator, currentMachineId])
 
   function set(key: string, value: string) {
     setForm((f) => ({ ...f, [key]: value }))
   }
 
-  function reset() {
-    setForm({})
-    setIsActive(true)
-    setFieldErrors({})
-    setFormError('')
-  }
+  // Reassign machine only when the selection changed. Releases whatever the
+  // operator currently holds, then attaches the new machine and logs history.
+  async function applyMachine(opId: string): Promise<unknown> {
+    if (machineId === currentMachineId) return null
+    const release = await supabase
+      .from('machine')
+      .update({ assigned_operator_id: null, updated_by: userId })
+      .eq('assigned_operator_id', opId)
+    if (release.error) return release.error
+    await supabase
+      .from('machine_assignment')
+      .update({ end_date: today() })
+      .eq('operator_id', opId)
+      .is('end_date', null)
 
-  function close() {
-    reset()
-    onClose()
+    if (machineId) {
+      const attach = await supabase
+        .from('machine')
+        .update({ assigned_operator_id: opId, updated_by: userId })
+        .eq('id', machineId)
+      if (attach.error) return attach.error
+      await supabase
+        .from('machine_assignment')
+        .insert({ machine_id: machineId, operator_id: opId, start_date: today(), created_by: userId })
+    }
+    return null
   }
 
   async function submit() {
@@ -313,8 +537,7 @@ function AddOperatorModal({
     if (Object.keys(errors).length > 0) return
 
     const text = (k: string) => (form[k]?.trim() ? form[k].trim() : null)
-
-    const payload = {
+    const base = {
       full_name: form.full_name.trim(),
       nrc_number: text('nrc_number'),
       phone_number: text('phone_number'),
@@ -324,11 +547,25 @@ function AddOperatorModal({
       licence_details: text('licence_details'),
       certifications: text('certifications'),
       is_active: isActive,
-      created_by: userId,
+      status,
     }
 
     setSaving(true)
-    const { error } = await supabase.from('operator').insert(payload)
+    let opId = operator?.id ?? ''
+    let error: unknown = null
+    if (mode === 'add') {
+      const res = await supabase.from('operator').insert({ ...base, created_by: userId }).select('id').single()
+      error = res.error
+      opId = (res.data?.id as string) ?? ''
+    } else {
+      const res = await supabase.from('operator').update({ ...base, updated_by: userId }).eq('id', opId)
+      error = res.error
+    }
+
+    if (!error && opId) {
+      const machineErr = await applyMachine(opId)
+      if (machineErr) error = machineErr
+    }
     setSaving(false)
 
     if (error) {
@@ -337,31 +574,39 @@ function AddOperatorModal({
         setFieldErrors({ nrc_number: 'An operator with this NRC number already exists.' })
         return
       }
-      if (/permission|policy|rls|denied/i.test(error.message ?? '')) {
-        setFormError('You do not have permission to add operators.')
+      if (/permission|policy|rls|denied/i.test((error as { message?: string }).message ?? '')) {
+        setFormError('You do not have permission to save operators.')
         return
       }
       setFormError('Could not save this operator. Please check the values and try again.')
       return
     }
-    reset()
-    onCreated()
+    onSaved()
   }
+
+  // Machines that can be picked: unassigned, or already held by this operator.
+  const machineOptions = machines.filter(
+    (m) => !m.assigned_operator_id || m.assigned_operator_id === operator?.id,
+  )
 
   return (
     <Modal
       open={open}
-      onClose={close}
+      onClose={saving ? () => {} : onClose}
       eyebrow="Operators"
-      title="Add Operator"
-      subtitle="Register a new operator. Assignments and daily hours are recorded in their own modules once they are deployed."
+      title={mode === 'edit' ? 'Edit Operator' : 'Add Operator'}
+      subtitle={
+        mode === 'edit'
+          ? 'Update this operator’s details, work status and machine assignment.'
+          : 'Register a new operator and optionally assign a machine.'
+      }
       footer={
         <div className="footer-actions">
-          <button className="button button-secondary" onClick={close} disabled={saving}>
+          <button className="button button-secondary" onClick={onClose} disabled={saving}>
             Cancel
           </button>
           <button className="button button-primary" onClick={submit} disabled={saving}>
-            {saving ? 'Saving…' : 'Save Operator'}
+            {saving ? 'Saving…' : mode === 'edit' ? 'Save changes' : 'Save Operator'}
           </button>
         </div>
       }
@@ -391,6 +636,30 @@ function AddOperatorModal({
           placeholder="e.g. 123456/78/9"
         />
         <OField label="Phone number" value={form.phone_number ?? ''} onChange={(v) => set('phone_number', v)} />
+
+        <div className="form-field">
+          <label htmlFor="op-status">Status</label>
+          <select id="op-status" value={status} onChange={(e) => setStatus(e.target.value)}>
+            {STATUS_OPTIONS.map((s) => (
+              <option key={s} value={s}>
+                {OPERATOR_STATUS_LABEL[s]}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="form-field">
+          <label htmlFor="op-machine">Assigned machine</label>
+          <select id="op-machine" value={machineId} onChange={(e) => setMachineId(e.target.value)}>
+            <option value="">— Unassigned —</option>
+            {machineOptions.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.machine_number} · {m.machine_type}
+              </option>
+            ))}
+          </select>
+        </div>
+
         <OField
           label="Employment date"
           type="date"

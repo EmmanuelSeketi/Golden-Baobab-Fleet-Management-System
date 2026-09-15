@@ -1,12 +1,13 @@
 'use client'
 
-import { useMemo, useState } from 'react'
-import { AlertTriangle, Plus } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
+import { AlertTriangle, Pencil, Plus, Trash2 } from 'lucide-react'
 import { useSupabase } from '@/lib/supabase/use-supabase'
 import { useQuery } from '@/lib/gbi/use-query'
 import { machineStatusTone, meter, money, shortDate, titleCase } from '@/lib/gbi/format'
 import { canManageOps, type UserRole } from '@/lib/gbi/roles'
 import {
+  ConfirmDialog,
   DetailGrid,
   MiniState,
   Modal,
@@ -33,12 +34,14 @@ type Machine = {
   purchase_date: string | null
   purchase_price: number | null
   current_status: string
+  assigned_operator_id: string | null
+  current_project_id: string | null
   operator: { full_name: string } | null
   project: { name: string; site_location: string | null } | null
 }
 
 const LIST_SELECT =
-  'id,machine_number,asset_number,registration_number,chassis_number,engine_number,machine_type,manufacturer,brand,model,year,current_hour_meter,service_interval_hours,purchase_date,purchase_price,current_status,operator:assigned_operator_id(full_name),project:current_project_id(name,site_location)'
+  'id,machine_number,asset_number,registration_number,chassis_number,engine_number,machine_type,manufacturer,brand,model,year,current_hour_meter,service_interval_hours,purchase_date,purchase_price,current_status,assigned_operator_id,current_project_id,operator:assigned_operator_id(full_name),project:current_project_id(name,site_location)'
 
 const MACHINE_STATUSES = [
   'available',
@@ -54,15 +57,19 @@ export function FleetView({ role, userId }: { role: UserRole; userId: string }) 
   const supabase = useSupabase()
   const [query, setQuery] = useState('')
   const [selected, setSelected] = useState<Machine | null>(null)
-  const [adding, setAdding] = useState(false)
-  const canAdd = canManageOps(role)
+  const [formMode, setFormMode] = useState<'add' | 'edit' | null>(null)
+  const [deleting, setDeleting] = useState<Machine | null>(null)
+  const [deleteBusy, setDeleteBusy] = useState(false)
+  const [deleteError, setDeleteError] = useState('')
+  const canManage = canManageOps(role)
 
   const machines = useQuery<Machine[]>(
     () =>
-      supabase.from('machine').select(LIST_SELECT).order('machine_number') as unknown as PromiseLike<{
-        data: Machine[] | null
-        error: unknown
-      }>,
+      supabase
+        .from('machine')
+        .select(LIST_SELECT)
+        .is('deleted_at', null)
+        .order('machine_number') as unknown as PromiseLike<{ data: Machine[] | null; error: unknown }>,
     [],
   )
 
@@ -78,6 +85,28 @@ export function FleetView({ role, userId }: { role: UserRole; userId: string }) 
     )
   }, [machines.data, query])
 
+  async function confirmDelete() {
+    if (!deleting) return
+    setDeleteBusy(true)
+    setDeleteError('')
+    const { error } = await supabase
+      .from('machine')
+      .update({ deleted_at: new Date().toISOString(), updated_by: userId })
+      .eq('id', deleting.id)
+    setDeleteBusy(false)
+    if (error) {
+      setDeleteError(
+        /permission|policy|rls|denied/i.test((error as { message?: string }).message ?? '')
+          ? 'You do not have permission to remove machines.'
+          : 'Could not remove this machine. Please try again.',
+      )
+      return
+    }
+    setDeleting(null)
+    setSelected(null)
+    machines.reload()
+  }
+
   return (
     <div className="page-wrap">
       <PageHeading
@@ -85,8 +114,14 @@ export function FleetView({ role, userId }: { role: UserRole; userId: string }) 
         title="Fleet Register"
         description="Every machine with its live hour meter, current status, operator and deployment."
         action={
-          canAdd ? (
-            <button className="button button-primary" onClick={() => setAdding(true)}>
+          canManage ? (
+            <button
+              className="button button-primary"
+              onClick={() => {
+                setSelected(null)
+                setFormMode('add')
+              }}
+            >
               <Plus size={15} />
               Add Machine
             </button>
@@ -149,19 +184,49 @@ export function FleetView({ role, userId }: { role: UserRole; userId: string }) 
         </ViewState>
       </div>
 
-      <MachineModal machine={selected} onClose={() => setSelected(null)} />
+      <MachineModal
+        machine={selected}
+        canManage={canManage}
+        onEdit={() => setFormMode('edit')}
+        onDelete={() => setDeleting(selected)}
+        onClose={() => setSelected(null)}
+      />
 
-      {canAdd && (
-        <AddMachineModal
-          open={adding}
+      {canManage && (
+        <MachineFormModal
+          open={formMode !== null}
+          mode={formMode ?? 'add'}
+          machine={formMode === 'edit' ? selected : null}
           userId={userId}
-          onClose={() => setAdding(false)}
-          onCreated={() => {
-            setAdding(false)
+          onClose={() => setFormMode(null)}
+          onSaved={() => {
+            setFormMode(null)
+            setSelected(null)
             machines.reload()
           }}
         />
       )}
+
+      <ConfirmDialog
+        open={deleting !== null}
+        title="Remove machine?"
+        confirmLabel="Remove machine"
+        busy={deleteBusy}
+        onCancel={() => {
+          if (deleteBusy) return
+          setDeleting(null)
+          setDeleteError('')
+        }}
+        onConfirm={confirmDelete}
+        message={
+          <>
+            <b>{deleting?.machine_number}</b> will be archived (soft delete) and removed from the register.
+            Its hours, maintenance, repairs and assignment history are preserved and can be restored in the
+            database.
+            {deleteError && <span className="confirm-error">{deleteError}</span>}
+          </>
+        }
+      />
     </div>
   )
 }
@@ -188,7 +253,19 @@ type AssignmentRow = {
   project: { name: string } | null
 }
 
-function MachineModal({ machine, onClose }: { machine: Machine | null; onClose: () => void }) {
+function MachineModal({
+  machine,
+  canManage,
+  onEdit,
+  onDelete,
+  onClose,
+}: {
+  machine: Machine | null
+  canManage: boolean
+  onEdit: () => void
+  onDelete: () => void
+  onClose: () => void
+}) {
   const supabase = useSupabase()
 
   const maintenance = useQuery<MaintRow[]>(
@@ -237,9 +314,23 @@ function MachineModal({ machine, onClose }: { machine: Machine | null; onClose: 
       subtitle={machine ? `${machine.machine_type}${machine.model ? ` · ${machine.model}` : ''}` : ''}
       footer={
         machine ? (
-          <StatusBadge tone={machineStatusTone(machine.current_status)}>
-            {titleCase(machine.current_status)}
-          </StatusBadge>
+          <div className="modal-foot-split">
+            <StatusBadge tone={machineStatusTone(machine.current_status)}>
+              {titleCase(machine.current_status)}
+            </StatusBadge>
+            {canManage && (
+              <div className="modal-foot-actions">
+                <button className="button button-secondary" onClick={onEdit}>
+                  <Pencil size={14} />
+                  Edit
+                </button>
+                <button className="button button-danger" onClick={onDelete}>
+                  <Trash2 size={14} />
+                  Delete
+                </button>
+              </div>
+            )}
+          </div>
         ) : null
       }
     >
@@ -329,16 +420,20 @@ function MachineModal({ machine, onClose }: { machine: Machine | null; onClose: 
 
 type OptionRow = { id: string; label: string }
 
-function AddMachineModal({
+function MachineFormModal({
   open,
+  mode,
+  machine,
   userId,
   onClose,
-  onCreated,
+  onSaved,
 }: {
   open: boolean
+  mode: 'add' | 'edit'
+  machine: Machine | null
   userId: string
   onClose: () => void
-  onCreated: () => void
+  onSaved: () => void
 }) {
   const supabase = useSupabase()
   const [form, setForm] = useState<Record<string, string>>({ current_status: 'available' })
@@ -346,7 +441,6 @@ function AddMachineModal({
   const [formError, setFormError] = useState('')
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
 
-  // Dropdown sources — only fetched while the form is open.
   const operators = useQuery<OptionRow[]>(
     () =>
       !open
@@ -354,6 +448,7 @@ function AddMachineModal({
         : supabase
             .from('operator')
             .select('id,full_name')
+            .is('deleted_at', null)
             .eq('is_active', true)
             .order('full_name')
             .then((r) => ({
@@ -377,19 +472,39 @@ function AddMachineModal({
     [open],
   )
 
-  function set(key: string, value: string) {
-    setForm((f) => ({ ...f, [key]: value }))
-  }
+  const str = (v: unknown) => (v == null ? '' : String(v))
 
-  function reset() {
-    setForm({ current_status: 'available' })
+  useEffect(() => {
+    if (!open) return
+    if (mode === 'edit' && machine) {
+      setForm({
+        machine_number: machine.machine_number ?? '',
+        asset_number: str(machine.asset_number),
+        registration_number: str(machine.registration_number),
+        chassis_number: str(machine.chassis_number),
+        engine_number: str(machine.engine_number),
+        machine_type: machine.machine_type ?? '',
+        manufacturer: str(machine.manufacturer),
+        brand: str(machine.brand),
+        model: str(machine.model),
+        year: str(machine.year),
+        purchase_date: str(machine.purchase_date),
+        purchase_price: str(machine.purchase_price),
+        current_hour_meter: str(machine.current_hour_meter),
+        service_interval_hours: str(machine.service_interval_hours),
+        current_status: machine.current_status ?? 'available',
+        assigned_operator_id: str(machine.assigned_operator_id),
+        current_project_id: str(machine.current_project_id),
+      })
+    } else {
+      setForm({ current_status: 'available' })
+    }
     setFieldErrors({})
     setFormError('')
-  }
+  }, [open, mode, machine])
 
-  function close() {
-    reset()
-    onClose()
+  function set(key: string, value: string) {
+    setForm((f) => ({ ...f, [key]: value }))
   }
 
   async function submit() {
@@ -422,11 +537,13 @@ function AddMachineModal({
       current_status: form.current_status || 'available',
       assigned_operator_id: text('assigned_operator_id'),
       current_project_id: text('current_project_id'),
-      created_by: userId,
     }
 
     setSaving(true)
-    const { error } = await supabase.from('machine').insert(payload)
+    const { error } =
+      mode === 'edit' && machine
+        ? await supabase.from('machine').update({ ...payload, updated_by: userId }).eq('id', machine.id)
+        : await supabase.from('machine').insert({ ...payload, created_by: userId })
     setSaving(false)
 
     if (error) {
@@ -436,14 +553,13 @@ function AddMachineModal({
         return
       }
       if (/permission|policy|rls|denied/i.test(error.message ?? '')) {
-        setFormError('You do not have permission to add machines.')
+        setFormError('You do not have permission to save machines.')
         return
       }
       setFormError('Could not save this machine. Please check the values and try again.')
       return
     }
-    reset()
-    onCreated()
+    onSaved()
   }
 
   const opts = operators.data ?? []
@@ -452,17 +568,21 @@ function AddMachineModal({
   return (
     <Modal
       open={open}
-      onClose={close}
+      onClose={saving ? () => {} : onClose}
       eyebrow="Fleet register"
-      title="Add Machine"
-      subtitle="Register a new machine. Maintenance, repairs and daily hours are recorded in their own modules once it exists."
+      title={mode === 'edit' ? 'Edit Machine' : 'Add Machine'}
+      subtitle={
+        mode === 'edit'
+          ? 'Update this machine’s registration details, status and deployment.'
+          : 'Register a new machine. Maintenance, repairs and daily hours are recorded in their own modules once it exists.'
+      }
       footer={
         <div className="footer-actions">
-          <button className="button button-secondary" onClick={close} disabled={saving}>
+          <button className="button button-secondary" onClick={onClose} disabled={saving}>
             Cancel
           </button>
           <button className="button button-primary" onClick={submit} disabled={saving}>
-            {saving ? 'Saving…' : 'Save Machine'}
+            {saving ? 'Saving…' : mode === 'edit' ? 'Save changes' : 'Save Machine'}
           </button>
         </div>
       }
@@ -612,12 +732,7 @@ function Field({
         {label}
         {required && <span className="req">*</span>}
       </label>
-      <input
-        type={type}
-        value={value}
-        placeholder={placeholder}
-        onChange={(e) => onChange(e.target.value)}
-      />
+      <input type={type} value={value} placeholder={placeholder} onChange={(e) => onChange(e.target.value)} />
       {error && <span className="field-error">{error}</span>}
     </div>
   )

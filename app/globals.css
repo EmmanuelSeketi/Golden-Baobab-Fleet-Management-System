@@ -7,7 +7,7 @@
 * { box-sizing: border-box; }
 html { background: var(--background); }
 .auth-loading { min-height: 100vh; display: grid; place-items: center; color: #5f6e66; background: #f7f8f5; font-weight: 600; }.login-shell { min-height: 100vh; display: grid; place-items: center; padding: 24px; background: radial-gradient(circle at 20% 20%, #e2f4e9 0, transparent 32%), #f7f8f5; }.login-card { width: min(100%, 430px); padding: 42px; background: #fff; border: 1px solid #dfe8e1; border-radius: 18px; box-shadow: 0 24px 70px rgba(23, 66, 43, .12); }.login-card img { width: 92px; height: 92px; object-fit: contain; margin-bottom: 20px; }.login-card h1 { margin: 8px 0 8px; font-size: 32px; letter-spacing: -.04em; }.login-card p { color: #68766e; line-height: 1.6; margin: 0 0 28px; }.login-card form { display: grid; gap: 9px; }.login-card label { color: #34453b; font-size: 12px; font-weight: 700; margin-top: 8px; }.login-card input { width: 100%; border: 1px solid #d6e0d9; border-radius: 8px; padding: 12px 13px; outline: none; }.login-card input:focus { border-color: #009943; box-shadow: 0 0 0 3px rgba(0, 153, 67, .12); }.login-button { margin-top: 14px; justify-content: center; }.login-card small { display: block; margin-top: 22px; color: #849189; line-height: 1.5; }.login-error { color: #b42318; background: #fff1f0; border: 1px solid #ffd0cc; border-radius: 7px; padding: 10px; font-size: 12px; margin-top: 8px; }.operator-avatar { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; color: #007a35; background: #e2f4e9; font-size: 11px; font-weight: 800; }.data-state { display: flex; align-items: flex-start; gap: 12px; padding: 28px; border: 1px solid var(--border); border-radius: 7px; background: #fff; color: #6b777c; }.data-state b { display: block; color: #273137; font-size: 14px; }.data-state p { margin: 4px 0 0; font-size: 12px; }.data-state svg { color: #009943; margin-top: 1px; }.error-state { border-color: #f0c8c4; background: #fff8f7; }.error-state svg { color: #b42318; }
-body { margin: 0; background: var(--background); color: var(--foreground); font-family: Arial, Helvetica, sans-serif; font-size: 13px; line-height: 1.5; }
+body { margin: 0; background: var(--background); color: var(--foreground); font-family: var(--font-sans), 'Segoe UI', system-ui, -apple-system, Arial, sans-serif; font-size: 13px; line-height: 1.5; font-weight: 450; -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
 button, input { font: inherit; }
 button { cursor: pointer; }
 .app-shell { display: flex; min-height: 100vh; }
@@ -179,3 +179,30 @@ nav { flex: 1; }.nav-group { margin-bottom: 21px; }.nav-group > small { display:
   .modal-overlay { padding: 0; place-items: stretch; }
   .modal-panel { width: 100%; max-height: 100vh; border-radius: 0; }
 }
+
+/* ---- Account pill (top bar) ---- */
+.account-pill { display: flex; align-items: center; gap: 9px; padding: 4px 12px 4px 4px; border: 1px solid var(--border); border-radius: 30px; background: #fff; }
+.account-pill .avatar { width: 30px; height: 30px; background: #26343a; color: #7fe0a6; font-size: 11px; }
+.account-meta { display: flex; flex-direction: column; line-height: 1.2; min-width: 0; }
+.account-meta b { font-size: 11.5px; font-weight: 700; color: #273137; max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.account-meta span { font-size: 10px; color: #8b979b; }
+@media (max-width: 760px) { .account-meta { display: none; } .account-pill { padding: 3px; border: 0; } }
+
+/* ---- Danger button + split modal footer ---- */
+.button-danger { background: #fff; border: 1px solid #eccbc8; color: #b42318; }
+.button-danger:hover { background: #fff5f4; border-color: #e3b5b0; }
+.modal-foot-split { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; }
+.modal-foot-actions { display: flex; gap: 8px; }
+.modal-footer.spread { justify-content: flex-start; }
+
+/* ---- Confirm dialog ---- */
+.confirm-overlay { position: fixed; inset: 0; background: rgba(20, 32, 26, .55); backdrop-filter: blur(3px); display: grid; place-items: center; padding: 24px; z-index: 60; }
+.confirm-card { width: min(100%, 420px); background: #fff; border: 1px solid #e2e8e4; border-radius: 14px; padding: 24px; box-shadow: 0 30px 80px rgba(20, 40, 28, .3); animation: modal-in .16s ease; }
+.confirm-icon { width: 44px; height: 44px; border-radius: 12px; background: #f8e3e1; color: #b42318; display: grid; place-items: center; margin-bottom: 15px; }
+.confirm-card h3 { margin: 0 0 8px; font-size: 18px; letter-spacing: -.3px; color: #202b31; }
+.confirm-message { margin: 0 0 20px; color: #68766e; font-size: 13px; line-height: 1.55; }
+.confirm-message .confirm-error { display: block; margin-top: 10px; color: #b42318; font-weight: 600; }
+.confirm-actions { display: flex; justify-content: flex-end; gap: 10px; }
+
+/* ---- Assignment cell ---- */
+.assign-chip { display: inline-flex; align-items: center; gap: 5px; background: #eef4f0; color: #2f6a48; border-radius: 6px; padding: 2px 8px; font-size: 10.5px; font-weight: 700; }

@@ -150,14 +150,6 @@ export function Workspace({ profile, email }: { profile: AppUser; email: string 
           </button>
         </div>
 
-        <div className="role-pill">
-          <div className="avatar">{initials}</div>
-          <div>
-            <b title={profile.full_name}>{profile.full_name}</b>
-            <span>{ROLE_LABEL[profile.role]}</span>
-          </div>
-        </div>
-
         <nav>
           {groups.map((g) => (
             <div className="nav-group" key={g.group}>
@@ -220,8 +212,12 @@ export function Workspace({ profile, email }: { profile: AppUser; email: string 
               <Bell size={18} />
               <i />
             </button>
-            <div className="top-avatar" title={`${profile.full_name} · ${email}`}>
-              {initials}
+            <div className="account-pill" title={`${profile.full_name} · ${email}`}>
+              <div className="avatar">{initials}</div>
+              <div className="account-meta">
+                <b>{profile.full_name}</b>
+                <span>{ROLE_LABEL[profile.role]}</span>
+              </div>
             </div>
           </div>
         </header>
