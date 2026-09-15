@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { AlertTriangle, Pencil, Plus, Trash2, Truck } from 'lucide-react'
+import { AlertTriangle, Eye, Pencil, Plus, Trash2, Truck } from 'lucide-react'
 import { useSupabase } from '@/lib/supabase/use-supabase'
 import { useQuery } from '@/lib/gbi/use-query'
 import {
@@ -19,6 +19,7 @@ import {
   Modal,
   ModalSection,
   PageHeading,
+  RowActions,
   StatusBadge,
   ViewState,
 } from '@/components/shared'
@@ -56,6 +57,7 @@ export function OperatorsView({ role, userId }: { role: UserRole; userId: string
   const supabase = useSupabase()
   const [query, setQuery] = useState('')
   const [selected, setSelected] = useState<Operator | null>(null)
+  const [formTarget, setFormTarget] = useState<Operator | null>(null)
   const [formMode, setFormMode] = useState<'add' | 'edit' | null>(null)
   const [deleting, setDeleting] = useState<Operator | null>(null)
   const [deleteBusy, setDeleteBusy] = useState(false)
@@ -159,6 +161,7 @@ export function OperatorsView({ role, userId }: { role: UserRole; userId: string
               className="button button-primary"
               onClick={() => {
                 setSelected(null)
+                setFormTarget(null)
                 setFormMode('add')
               }}
             >
@@ -197,6 +200,7 @@ export function OperatorsView({ role, userId }: { role: UserRole; userId: string
                   <th>Assigned machine</th>
                   <th>Employed</th>
                   <th>Status</th>
+                  <th className="col-actions">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -234,6 +238,32 @@ export function OperatorsView({ role, userId }: { role: UserRole; userId: string
                           {OPERATOR_STATUS_LABEL[o.status] ?? titleCase(o.status)}
                         </StatusBadge>
                       </td>
+                      <td className="col-actions" onClick={(e) => e.stopPropagation()}>
+                        <RowActions
+                          label={`Actions for ${o.full_name}`}
+                          actions={[
+                            { label: 'View details', icon: Eye, onClick: () => setSelected(o) },
+                            ...(canManage
+                              ? [
+                                  {
+                                    label: 'Edit operator',
+                                    icon: Pencil,
+                                    onClick: () => {
+                                      setFormTarget(o)
+                                      setFormMode('edit')
+                                    },
+                                  },
+                                  {
+                                    label: 'Delete operator',
+                                    icon: Trash2,
+                                    danger: true,
+                                    onClick: () => setDeleting(o),
+                                  },
+                                ]
+                              : []),
+                          ]}
+                        />
+                      </td>
                     </tr>
                   )
                 })}
@@ -244,10 +274,13 @@ export function OperatorsView({ role, userId }: { role: UserRole; userId: string
       </div>
 
       <OperatorModal
-        operator={selected}
+        operator={formMode ? null : selected}
         assigned={selected ? assignedFor(selected.id) : []}
         canManage={canManage}
-        onEdit={() => setFormMode('edit')}
+        onEdit={() => {
+          setFormTarget(selected)
+          setFormMode('edit')
+        }}
         onDelete={() => setDeleting(selected)}
         onClose={() => setSelected(null)}
       />
@@ -256,13 +289,17 @@ export function OperatorsView({ role, userId }: { role: UserRole; userId: string
         <OperatorFormModal
           open={formMode !== null}
           mode={formMode ?? 'add'}
-          operator={formMode === 'edit' ? selected : null}
+          operator={formTarget}
           userId={userId}
           machines={machines.data ?? []}
-          currentMachineId={formMode === 'edit' && selected ? assignedFor(selected.id)[0]?.id ?? '' : ''}
-          onClose={() => setFormMode(null)}
+          currentMachineId={formTarget ? assignedFor(formTarget.id)[0]?.id ?? '' : ''}
+          onClose={() => {
+            setFormMode(null)
+            setFormTarget(null)
+          }}
           onSaved={() => {
             setFormMode(null)
+            setFormTarget(null)
             setSelected(null)
             reloadAll()
           }}

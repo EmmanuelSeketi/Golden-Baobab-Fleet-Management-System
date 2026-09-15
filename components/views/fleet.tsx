@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { AlertTriangle, Pencil, Plus, Trash2 } from 'lucide-react'
+import { AlertTriangle, Eye, Pencil, Plus, Trash2 } from 'lucide-react'
 import { useSupabase } from '@/lib/supabase/use-supabase'
 import { useQuery } from '@/lib/gbi/use-query'
 import { machineStatusTone, meter, money, shortDate, titleCase } from '@/lib/gbi/format'
@@ -13,6 +13,7 @@ import {
   Modal,
   ModalSection,
   PageHeading,
+  RowActions,
   StatusBadge,
   ViewState,
 } from '@/components/shared'
@@ -57,6 +58,7 @@ export function FleetView({ role, userId }: { role: UserRole; userId: string }) 
   const supabase = useSupabase()
   const [query, setQuery] = useState('')
   const [selected, setSelected] = useState<Machine | null>(null)
+  const [formTarget, setFormTarget] = useState<Machine | null>(null)
   const [formMode, setFormMode] = useState<'add' | 'edit' | null>(null)
   const [deleting, setDeleting] = useState<Machine | null>(null)
   const [deleteBusy, setDeleteBusy] = useState(false)
@@ -119,6 +121,7 @@ export function FleetView({ role, userId }: { role: UserRole; userId: string }) 
               className="button button-primary"
               onClick={() => {
                 setSelected(null)
+                setFormTarget(null)
                 setFormMode('add')
               }}
             >
@@ -158,6 +161,7 @@ export function FleetView({ role, userId }: { role: UserRole; userId: string }) 
                   <th>Operator</th>
                   <th>Deployment</th>
                   <th>Status</th>
+                  <th className="col-actions">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -176,6 +180,32 @@ export function FleetView({ role, userId }: { role: UserRole; userId: string }) 
                         {titleCase(m.current_status)}
                       </StatusBadge>
                     </td>
+                    <td className="col-actions" onClick={(e) => e.stopPropagation()}>
+                      <RowActions
+                        label={`Actions for ${m.machine_number}`}
+                        actions={[
+                          { label: 'View details', icon: Eye, onClick: () => setSelected(m) },
+                          ...(canManage
+                            ? [
+                                {
+                                  label: 'Edit machine',
+                                  icon: Pencil,
+                                  onClick: () => {
+                                    setFormTarget(m)
+                                    setFormMode('edit')
+                                  },
+                                },
+                                {
+                                  label: 'Delete machine',
+                                  icon: Trash2,
+                                  danger: true,
+                                  onClick: () => setDeleting(m),
+                                },
+                              ]
+                            : []),
+                        ]}
+                      />
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -185,9 +215,12 @@ export function FleetView({ role, userId }: { role: UserRole; userId: string }) 
       </div>
 
       <MachineModal
-        machine={selected}
+        machine={formMode ? null : selected}
         canManage={canManage}
-        onEdit={() => setFormMode('edit')}
+        onEdit={() => {
+          setFormTarget(selected)
+          setFormMode('edit')
+        }}
         onDelete={() => setDeleting(selected)}
         onClose={() => setSelected(null)}
       />
@@ -196,11 +229,15 @@ export function FleetView({ role, userId }: { role: UserRole; userId: string }) 
         <MachineFormModal
           open={formMode !== null}
           mode={formMode ?? 'add'}
-          machine={formMode === 'edit' ? selected : null}
+          machine={formTarget}
           userId={userId}
-          onClose={() => setFormMode(null)}
+          onClose={() => {
+            setFormMode(null)
+            setFormTarget(null)
+          }}
           onSaved={() => {
             setFormMode(null)
+            setFormTarget(null)
             setSelected(null)
             machines.reload()
           }}

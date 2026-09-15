@@ -1,7 +1,7 @@
 'use client'
 
-import { useEffect } from 'react'
-import { AlertTriangle, ArrowUpRight, Inbox, Loader2, X } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { AlertTriangle, ArrowUpRight, Inbox, Loader2, MoreHorizontal, X } from 'lucide-react'
 import type { Tone } from '@/lib/gbi/format'
 import type { QueryStatus } from '@/lib/gbi/use-query'
 
@@ -251,6 +251,97 @@ export function MiniState({
   if (status === 'error') return <p className="mini-state error">{error}</p>
   if (isEmpty) return <p className="mini-state">{emptyText}</p>
   return null
+}
+
+export type RowAction = {
+  label: string
+  icon: React.ElementType
+  onClick: () => void
+  danger?: boolean
+}
+
+/**
+ * A circular three-dot trigger that opens a small action menu inline in a table
+ * row, so Edit/Delete/View can run without first opening the detail modal. The
+ * menu is fixed-positioned from the trigger's rect so it is never clipped by the
+ * table's horizontal scroll container.
+ */
+export function RowActions({ actions, label = 'Row actions' }: { actions: RowAction[]; label?: string }) {
+  const [open, setOpen] = useState(false)
+  const [coords, setCoords] = useState({ top: 0, left: 0 })
+  const btnRef = useRef<HTMLButtonElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    const close = () => setOpen(false)
+    const onDocDown = (e: MouseEvent) => {
+      if (btnRef.current && !btnRef.current.contains(e.target as Node)) setOpen(false)
+    }
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setOpen(false)
+    document.addEventListener('mousedown', onDocDown)
+    document.addEventListener('keydown', onKey)
+    window.addEventListener('resize', close)
+    window.addEventListener('scroll', close, true)
+    return () => {
+      document.removeEventListener('mousedown', onDocDown)
+      document.removeEventListener('keydown', onKey)
+      window.removeEventListener('resize', close)
+      window.removeEventListener('scroll', close, true)
+    }
+  }, [open])
+
+  if (actions.length === 0) return null
+
+  function toggle(e: React.MouseEvent) {
+    e.stopPropagation()
+    const rect = btnRef.current?.getBoundingClientRect()
+    if (rect) setCoords({ top: rect.bottom + 6, left: Math.max(8, rect.right - 194) })
+    setOpen((v) => !v)
+  }
+
+  return (
+    <>
+      <button
+        ref={btnRef}
+        type="button"
+        className={`row-action-trigger${open ? ' is-open' : ''}`}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-label={label}
+        onClick={toggle}
+      >
+        <MoreHorizontal size={16} />
+      </button>
+      {open && (
+        <div
+          className="row-action-menu"
+          role="menu"
+          style={{ top: coords.top, left: coords.left }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {actions.map((a) => {
+            const Icon = a.icon
+            return (
+              <button
+                key={a.label}
+                type="button"
+                role="menuitem"
+                className={`row-action-item${a.danger ? ' danger' : ''}`}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setOpen(false)
+                  a.onClick()
+                }}
+              >
+                <Icon size={15} />
+                {a.label}
+              </button>
+            )
+          })}
+        </div>
+      )}
+    </>
+  )
 }
 
 /**
