@@ -66,7 +66,7 @@ export function OverviewView({ role, fullName }: { role: UserRole; fullName: str
   const showCommercial = canAccess('Billing & Invoices', role)
 
   const machines = useQuery<MachineStatusRow[]>(
-    () => supabase.from('machine').select('current_status'),
+    () => supabase.from('machine').select('current_status').is('deleted_at', null),
     [],
   )
   const hours = useQuery<HourRow[]>(

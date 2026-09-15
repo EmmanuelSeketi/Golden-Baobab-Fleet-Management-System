@@ -53,7 +53,7 @@ const NAV: NavGroup[] = [
     group: 'Workspace',
     zh: '工作区',
     items: [
-      { module: 'Overview', label: 'Overview', zh: '概览', icon: LayoutDashboard },
+      { module: 'Overview', label: 'Dashboard', zh: '仪表板', icon: LayoutDashboard },
       { module: 'Daily Hours', label: 'Daily Working Hours', zh: '每日工时', icon: Clock },
       { module: 'Fleet', label: 'Fleet Register', zh: '车队登记', icon: Truck },
       { module: 'Operators', label: 'Operators', zh: '操作员', icon: Users },
