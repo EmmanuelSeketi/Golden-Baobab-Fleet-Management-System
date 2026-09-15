@@ -59,6 +59,13 @@ export function canAccess(module: Module, role: UserRole): boolean {
   return allowed ? allowed.includes(role) : true
 }
 
+// Write access to operational tables (machine, operator, …) mirrors the RLS
+// insert policy: administrator + operations_manager only. Management is
+// read-only, so it never sees create/edit controls.
+export function canManageOps(role: UserRole): boolean {
+  return role === 'administrator' || role === 'operations_manager'
+}
+
 export function initialsOf(name: string): string {
   return name
     .split(' ')

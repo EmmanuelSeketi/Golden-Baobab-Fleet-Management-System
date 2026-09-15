@@ -226,7 +226,12 @@ export function Workspace({ profile, email }: { profile: AppUser; email: string 
           </div>
         </header>
 
-        <ActiveView module={active} role={profile.role} fullName={profile.full_name} />
+        <ActiveView
+          module={active}
+          role={profile.role}
+          userId={profile.id}
+          fullName={profile.full_name}
+        />
       </div>
     </div>
   )
@@ -235,10 +240,12 @@ export function Workspace({ profile, email }: { profile: AppUser; email: string 
 function ActiveView({
   module,
   role,
+  userId,
   fullName,
 }: {
   module: Module
   role: AppUser['role']
+  userId: string
   fullName: string
 }) {
   // Defense in depth: even though nav is filtered, never render a module this
@@ -262,9 +269,9 @@ function ActiveView({
     case 'Daily Hours':
       return <DailyHoursView />
     case 'Fleet':
-      return <FleetView />
+      return <FleetView role={role} userId={userId} />
     case 'Operators':
-      return <OperatorsView />
+      return <OperatorsView role={role} userId={userId} />
     case 'Overtime':
       return <OvertimeView />
     case 'Customers & Contracts':

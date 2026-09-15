@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { AlertTriangle, CalendarClock, Clock, Truck, Wallet } from 'lucide-react'
 import { useSupabase } from '@/lib/supabase/use-supabase'
 import { useQuery } from '@/lib/gbi/use-query'
@@ -43,11 +43,20 @@ const STATUS_COLORS: Record<string, string> = {
   parked: '#9aa9ad',
 }
 
-function greeting() {
-  const h = new Date().getHours()
-  if (h < 12) return 'Good morning'
-  if (h < 18) return 'Good afternoon'
+function greetingFor(hour: number) {
+  if (hour < 12) return 'Good morning'
+  if (hour < 18) return 'Good afternoon'
   return 'Good evening'
+}
+
+// Time-of-day depends on the viewer's clock, so it must be computed after mount
+// to avoid a server/client hydration mismatch. Start neutral, then personalise.
+function useGreeting() {
+  const [greeting, setGreeting] = useState('Welcome back')
+  useEffect(() => {
+    setGreeting(greetingFor(new Date().getHours()))
+  }, [])
+  return greeting
 }
 
 export function OverviewView({ role, fullName }: { role: UserRole; fullName: string }) {
@@ -152,7 +161,7 @@ export function OverviewView({ role, fullName }: { role: UserRole; fullName: str
     <div className="page-wrap">
       <PageHeading
         eyebrow="Operations control"
-        title={`${greeting()}, ${firstNameOf(fullName)}`}
+        title={`${greeting}, ${firstNameOf(fullName)}`}
         description="Live snapshot of fleet, utilisation and upcoming service across GBI Group."
       />
 
