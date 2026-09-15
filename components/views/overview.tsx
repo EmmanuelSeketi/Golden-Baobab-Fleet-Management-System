@@ -293,7 +293,7 @@ export function OverviewView({ role, fullName }: { role: UserRole; fullName: str
                 />
               </div>
             ) : (
-              <table className="data-table">
+              <table className="data-table compact">
                 <thead>
                   <tr>
                     <th>Machine</th>
@@ -338,7 +338,7 @@ export function OverviewView({ role, fullName }: { role: UserRole; fullName: str
                 />
               </div>
             ) : (
-              <table className="data-table">
+              <table className="data-table compact">
                 <thead>
                   <tr>
                     <th>Date</th>

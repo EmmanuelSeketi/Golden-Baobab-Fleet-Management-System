@@ -270,12 +270,18 @@ export function RowActions({ actions, label = 'Row actions' }: { actions: RowAct
   const [open, setOpen] = useState(false)
   const [coords, setCoords] = useState({ top: 0, left: 0 })
   const btnRef = useRef<HTMLButtonElement>(null)
+  const menuRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     if (!open) return
     const close = () => setOpen(false)
     const onDocDown = (e: MouseEvent) => {
-      if (btnRef.current && !btnRef.current.contains(e.target as Node)) setOpen(false)
+      const target = e.target as Node
+      // The menu is a fixed-positioned sibling of the trigger, so it must be
+      // excluded here too — otherwise mousedown closes it before a menu item's
+      // click can fire.
+      if (btnRef.current?.contains(target) || menuRef.current?.contains(target)) return
+      setOpen(false)
     }
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setOpen(false)
     document.addEventListener('mousedown', onDocDown)

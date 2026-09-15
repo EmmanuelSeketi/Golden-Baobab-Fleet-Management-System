@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { AlertTriangle, CalendarDays, Download, FileSpreadsheet } from 'lucide-react'
 import { useSupabase } from '@/lib/supabase/use-supabase'
 import { useQuery } from '@/lib/gbi/use-query'
@@ -56,6 +56,7 @@ export function DailyHoursView() {
   const today = isoDate(new Date())
   const [selectedDate, setSelectedDate] = useState<string>(today)
   const [selected, setSelected] = useState<Entry | null>(null)
+  const dateInputRef = useRef<HTMLInputElement>(null)
 
   const entries = useQuery<Entry[]>(
     () =>
@@ -86,9 +87,21 @@ export function DailyHoursView() {
       <ExportBar />
 
       <div className="hours-toolbar">
-        <label className="date-control">
+        <label
+          className="date-control"
+          onClick={() => {
+            // Open the native picker from anywhere in the control, not just the
+            // (now hidden) built-in indicator icon.
+            try {
+              dateInputRef.current?.showPicker?.()
+            } catch {
+              /* showPicker unsupported/blocked — focusing the input still works */
+            }
+          }}
+        >
           <CalendarDays size={15} />
           <input
+            ref={dateInputRef}
             type="date"
             value={selectedDate}
             max={today}
