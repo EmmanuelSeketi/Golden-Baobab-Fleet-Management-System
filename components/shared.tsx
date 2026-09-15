@@ -320,6 +320,7 @@ export function RowActions({ actions, label = 'Row actions' }: { actions: RowAct
       </button>
       {open && (
         <div
+          ref={menuRef}
           className="row-action-menu"
           role="menu"
           style={{ top: coords.top, left: coords.left }}

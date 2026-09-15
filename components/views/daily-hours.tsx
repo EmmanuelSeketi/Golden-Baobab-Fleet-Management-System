@@ -251,6 +251,16 @@ function ExportBar() {
   const [to, setTo] = useState<string>(isoDate(new Date()))
   const [busy, setBusy] = useState<null | 'csv' | 'xlsx'>(null)
   const [message, setMessage] = useState<{ text: string; error: boolean } | null>(null)
+  const fromRef = useRef<HTMLInputElement>(null)
+  const toRef = useRef<HTMLInputElement>(null)
+
+  function openPicker(ref: React.RefObject<HTMLInputElement | null>) {
+    try {
+      ref.current?.showPicker?.()
+    } catch {
+      /* showPicker unsupported/blocked — focusing the input still works */
+    }
+  }
 
   async function runExport(kind: 'csv' | 'xlsx') {
     if (from > to) {
@@ -301,19 +311,33 @@ function ExportBar() {
         <span>Choose any date range — independent of the day shown below.</span>
       </div>
       <div className="range-field">
-        <label htmlFor="export-from">From</label>
-        <input id="export-from" type="date" value={from} max={to} onChange={(e) => setFrom(e.target.value)} />
+        <span className="range-label">From</span>
+        <label className="date-control" onClick={() => openPicker(fromRef)}>
+          <CalendarDays size={15} />
+          <input
+            ref={fromRef}
+            type="date"
+            value={from}
+            max={to}
+            onChange={(e) => setFrom(e.target.value)}
+            aria-label="Export from date"
+          />
+        </label>
       </div>
       <div className="range-field">
-        <label htmlFor="export-to">To</label>
-        <input
-          id="export-to"
-          type="date"
-          value={to}
-          min={from}
-          max={isoDate(new Date())}
-          onChange={(e) => setTo(e.target.value)}
-        />
+        <span className="range-label">To</span>
+        <label className="date-control" onClick={() => openPicker(toRef)}>
+          <CalendarDays size={15} />
+          <input
+            ref={toRef}
+            type="date"
+            value={to}
+            min={from}
+            max={isoDate(new Date())}
+            onChange={(e) => setTo(e.target.value)}
+            aria-label="Export to date"
+          />
+        </label>
       </div>
       <div className="export-actions">
         <button className="button button-secondary" onClick={() => runExport('csv')} disabled={busy !== null}>
