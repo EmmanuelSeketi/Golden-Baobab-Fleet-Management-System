@@ -1,5 +1,6 @@
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
+import { supabaseUrl } from '@/lib/supabase/url'
 
 /**
  * Especially important if using Fluid compute: Don't put this client in a
@@ -10,7 +11,7 @@ export async function createClient() {
   const cookieStore = await cookies()
 
   return createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    supabaseUrl(),
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       // Secure cookies in production; not in dev, so localhost still works.
