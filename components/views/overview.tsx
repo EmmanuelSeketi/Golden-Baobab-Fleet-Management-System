@@ -61,6 +61,7 @@ function useGreeting() {
 
 export function OverviewView({ role, fullName }: { role: UserRole; fullName: string }) {
   const supabase = useSupabase()
+  const greeting = useGreeting()
   const since = useMemo(() => new Date(Date.now() - 13 * 86400000).toISOString().slice(0, 10), [])
   const showCommercial = canAccess('Billing & Invoices', role)
 
