@@ -30,6 +30,7 @@ export type Module =
   | 'Repairs'
   | 'Notifications'
   | 'Audit Log'
+  | 'Settings'
 
 export const ROLE_LABEL: Record<UserRole, string> = {
   administrator: 'Administrator',
@@ -54,6 +55,7 @@ const MODULE_ROLES: Partial<Record<Module, UserRole[]>> = {
   'Customers & Contracts': COMMERCIAL_ROLES,
   'Billing & Invoices': COMMERCIAL_ROLES,
   'Audit Log': AUDIT_ROLES,
+  Settings: ['administrator'],
 }
 
 export function canAccess(module: Module, role: UserRole): boolean {

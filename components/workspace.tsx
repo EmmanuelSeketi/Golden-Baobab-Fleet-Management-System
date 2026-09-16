@@ -18,6 +18,7 @@ import {
   ReceiptText,
   ScrollText,
   Search,
+  Settings,
   Timer,
   Truck,
   Users,
@@ -48,6 +49,7 @@ import { MaintenanceView } from '@/components/views/maintenance'
 import { RepairsView } from '@/components/views/repairs'
 import { NotificationsView } from '@/components/views/notifications'
 import { AuditView } from '@/components/views/audit'
+import { SettingsView } from '@/components/views/settings'
 
 type NavItem = { module: Module; label: string; zh: string; icon: React.ElementType }
 type NavGroup = { group: string; zh: string; items: NavItem[] }
@@ -89,6 +91,7 @@ const NAV: NavGroup[] = [
     items: [
       { module: 'Notifications', label: 'Notifications', zh: '通知', icon: Bell },
       { module: 'Audit Log', label: 'Audit Log', zh: '审计日志', icon: ScrollText },
+      { module: 'Settings', label: 'Settings & Backup', zh: '设置与备份', icon: Settings },
     ],
   },
 ]
@@ -294,6 +297,8 @@ function ActiveView({
       return <NotificationsView />
     case 'Audit Log':
       return <AuditView />
+    case 'Settings':
+      return <SettingsView userId={userId} />
     default:
       return null
   }
