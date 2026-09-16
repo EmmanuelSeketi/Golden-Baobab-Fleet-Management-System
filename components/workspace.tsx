@@ -9,6 +9,7 @@ import {
   ChevronRight,
   Clock,
   Hammer,
+  History,
   LayoutDashboard,
   LifeBuoy,
   LogOut,
@@ -36,6 +37,7 @@ import { OverviewView } from '@/components/views/overview'
 import { DailyHoursView } from '@/components/views/daily-hours'
 import { FleetView } from '@/components/views/fleet'
 import { OperatorsView } from '@/components/views/operators'
+import { MachineHistoryView } from '@/components/views/machine-history'
 import { OvertimeView } from '@/components/views/overtime'
 import { ContractsView } from '@/components/views/contracts'
 import { BillingView } from '@/components/views/billing'
@@ -56,6 +58,7 @@ const NAV: NavGroup[] = [
       { module: 'Overview', label: 'Dashboard', zh: '仪表板', icon: LayoutDashboard },
       { module: 'Daily Hours', label: 'Daily Working Hours', zh: '每日工时', icon: Clock },
       { module: 'Fleet', label: 'Fleet Register', zh: '车队登记', icon: Truck },
+      { module: 'Machine History', label: 'Machine History', zh: '机器历史', icon: History },
       { module: 'Operators', label: 'Operators', zh: '操作员', icon: Users },
       { module: 'Overtime', label: 'Operator Overtime', zh: '操作员加班', icon: Timer },
     ],
@@ -268,6 +271,8 @@ function ActiveView({
       return <FleetView role={role} userId={userId} />
     case 'Operators':
       return <OperatorsView role={role} userId={userId} />
+    case 'Machine History':
+      return <MachineHistoryView />
     case 'Overtime':
       return <OvertimeView />
     case 'Customers & Contracts':

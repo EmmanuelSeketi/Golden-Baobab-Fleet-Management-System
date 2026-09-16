@@ -21,6 +21,7 @@ export type Module =
   | 'Fleet'
   | 'Operators'
   | 'Overtime'
+  | 'Machine History'
   | 'Customers & Contracts'
   | 'Billing & Invoices'
   | 'Reports'
