@@ -80,6 +80,18 @@ export function canManageOvertimeRules(role: UserRole): boolean {
   return role === 'administrator'
 }
 
+// Generating overtime entries writes overtime_entry, grouped with the
+// operational write policy (administrator + operations_manager).
+export function canGenerateOvertime(role: UserRole): boolean {
+  return role === 'administrator' || role === 'operations_manager'
+}
+
+// Reviewing overtime is a management sign-off; administrators and operations
+// managers may also clear the queue.
+export function canReviewOvertime(role: UserRole): boolean {
+  return role === 'administrator' || role === 'management' || role === 'operations_manager'
+}
+
 export function initialsOf(name: string): string {
   return name
     .split(' ')

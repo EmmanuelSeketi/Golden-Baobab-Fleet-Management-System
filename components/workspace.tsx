@@ -274,7 +274,7 @@ function ActiveView({
     case 'Machine History':
       return <MachineHistoryView />
     case 'Overtime':
-      return <OvertimeView />
+      return <OvertimeView role={role} userId={userId} />
     case 'Customers & Contracts':
       return <ContractsView role={role} userId={userId} />
     case 'Billing & Invoices':
