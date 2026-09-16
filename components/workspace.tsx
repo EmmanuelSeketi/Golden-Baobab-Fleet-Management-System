@@ -6,6 +6,7 @@ import {
   BarChart3,
   Bell,
   Building2,
+  CalendarDays,
   ChevronRight,
   Clock,
   Hammer,
@@ -38,6 +39,7 @@ import { DailyHoursView } from '@/components/views/daily-hours'
 import { FleetView } from '@/components/views/fleet'
 import { OperatorsView } from '@/components/views/operators'
 import { MachineHistoryView } from '@/components/views/machine-history'
+import { CalendarView } from '@/components/views/calendar'
 import { OvertimeView } from '@/components/views/overtime'
 import { ContractsView } from '@/components/views/contracts'
 import { BillingView } from '@/components/views/billing'
@@ -78,6 +80,7 @@ const NAV: NavGroup[] = [
     items: [
       { module: 'Maintenance', label: 'Maintenance', zh: '保养', icon: Wrench },
       { module: 'Repairs', label: 'Repairs', zh: '维修', icon: Hammer },
+      { module: 'Calendar', label: 'Calendar', zh: '日历', icon: CalendarDays },
     ],
   },
   {
@@ -271,8 +274,10 @@ function ActiveView({
       return <FleetView role={role} userId={userId} />
     case 'Operators':
       return <OperatorsView role={role} userId={userId} />
-    case 'Machine History':
-      return <MachineHistoryView />
+      case 'Machine History':
+        return <MachineHistoryView />
+      case 'Calendar':
+        return <CalendarView />
     case 'Overtime':
       return <OvertimeView role={role} userId={userId} />
     case 'Customers & Contracts':

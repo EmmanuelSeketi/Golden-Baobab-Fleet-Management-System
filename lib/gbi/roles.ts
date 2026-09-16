@@ -22,6 +22,7 @@ export type Module =
   | 'Operators'
   | 'Overtime'
   | 'Machine History'
+  | 'Calendar'
   | 'Customers & Contracts'
   | 'Billing & Invoices'
   | 'Reports'
