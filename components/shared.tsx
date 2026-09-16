@@ -219,18 +219,23 @@ export function DetailGrid({ items }: { items: [string, React.ReactNode][] }) {
 export function ModalSection({
   title,
   count,
+  action,
   children,
 }: {
   title: string
   count?: number
+  action?: React.ReactNode
   children: React.ReactNode
 }) {
   return (
     <section className="modal-section">
-      <h3>
-        {title}
-        {typeof count === 'number' && <span className="section-count">{count}</span>}
-      </h3>
+      <div className="modal-section-head">
+        <h3>
+          {title}
+          {typeof count === 'number' && <span className="section-count">{count}</span>}
+        </h3>
+        {action}
+      </div>
       {children}
     </section>
   )

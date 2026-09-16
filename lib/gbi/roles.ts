@@ -67,6 +67,19 @@ export function canManageOps(role: UserRole): boolean {
   return role === 'administrator' || role === 'operations_manager'
 }
 
+// Write access to commercial tables (customer, contract, contract_machine,
+// billing_rule, billing_entry, invoice, invoice_adjustment) mirrors the RLS
+// insert/update policy: administrator + accounts_billing only. Management has
+// read-only commercial access; operations_manager has none.
+export function canManageCommercial(role: UserRole): boolean {
+  return role === 'administrator' || role === 'accounts_billing'
+}
+
+// overtime_rule configuration is administrator-only per RLS.
+export function canManageOvertimeRules(role: UserRole): boolean {
+  return role === 'administrator'
+}
+
 export function initialsOf(name: string): string {
   return name
     .split(' ')

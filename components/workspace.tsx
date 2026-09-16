@@ -276,7 +276,7 @@ function ActiveView({
     case 'Overtime':
       return <OvertimeView />
     case 'Customers & Contracts':
-      return <ContractsView />
+      return <ContractsView role={role} userId={userId} />
     case 'Billing & Invoices':
       return <BillingView />
     case 'Reports':

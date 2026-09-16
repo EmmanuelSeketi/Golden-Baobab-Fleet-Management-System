@@ -192,7 +192,17 @@ nav { flex: 1; }.nav-group { margin-bottom: 21px; }.nav-group > small { display:
 .detail-item dt { color: #8b979b; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; margin-bottom: 3px; }
 .detail-item dd { margin: 0; color: #37454a; font-size: 13px; word-break: break-word; }
 .modal-section { margin-top: 22px; }
+.modal-section-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 0 0 12px; padding-bottom: 8px; border-bottom: 1px solid #eef1f2; }
+.modal-section-head h3 { margin: 0; padding: 0; border: 0; }
 .modal-section h3 { display: flex; align-items: center; gap: 8px; font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: #7c898d; margin: 0 0 12px; padding-bottom: 8px; border-bottom: 1px solid #eef1f2; }
+.mini-add { display: inline-flex; align-items: center; gap: 5px; border: 1px solid #d5dbdc; background: #fff; color: #2f6b3d; font-size: 11px; font-weight: 600; padding: 4px 9px; border-radius: 7px; cursor: pointer; white-space: nowrap; }
+.mini-add:hover { background: #f2f7f3; border-color: #b7c6ba; }
+.mini-link-danger { border: 0; background: none; color: #b4453a; font-size: 11px; font-weight: 600; cursor: pointer; padding: 0 0 0 4px; }
+.mini-link-danger:hover { text-decoration: underline; }
+.field-hint { font-size: 11px; color: #7c898d; margin-top: 4px; }
+.seg-tabs { display: inline-flex; background: #eef1f2; border-radius: 9px; padding: 3px; gap: 2px; }
+.seg-tabs button { display: inline-flex; align-items: center; gap: 6px; border: 0; background: none; color: #5e6c71; font-size: 13px; font-weight: 600; padding: 6px 14px; border-radius: 7px; cursor: pointer; }
+.seg-tabs button.active { background: #fff; color: #1b2a2f; box-shadow: 0 1px 2px rgba(0,0,0,.08); }
 .section-count { background: #eef1f2; color: #5e6c71; border-radius: 20px; min-width: 18px; height: 18px; padding: 0 6px; display: inline-grid; place-items: center; font-size: 10px; }
 .stack-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 9px 0; border-bottom: 1px solid #f2f4f4; }
 .stack-row:last-child { border-bottom: 0; }
