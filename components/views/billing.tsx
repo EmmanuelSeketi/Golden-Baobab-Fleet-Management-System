@@ -84,7 +84,7 @@ export function BillingView({ role, userId }: { role: UserRole; userId: string }
     return { invoiced, outstanding, paid, draft }
   }, [rows])
 
-  const ready = invoices.status === 'success'
+  const ready = invoices.status === 'ready'
 
   return (
     <div className="page-wrap">

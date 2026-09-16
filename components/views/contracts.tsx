@@ -1353,7 +1353,7 @@ function AddMachineModal({
             ))}
           </select>
           {fieldErrors.machine_id && <span className="field-error">{fieldErrors.machine_id}</span>}
-          {available.length === 0 && machines.status === 'success' && (
+          {available.length === 0 && machines.status === 'ready' && (
             <span className="field-hint">All active machines are already on this contract.</span>
           )}
         </div>

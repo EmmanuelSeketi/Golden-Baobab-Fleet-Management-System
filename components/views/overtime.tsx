@@ -100,20 +100,20 @@ export function OvertimeView({ role, userId }: { role: UserRole; userId: string 
       <div className="hours-summary">
         <div>
           <span>Entries</span>
-          <b>{records.status === 'success' ? rows.length : '—'}</b>
+          <b>{records.status === 'ready' ? rows.length : '—'}</b>
         </div>
         <div>
           <span>Overtime hours</span>
-          <b>{records.status === 'success' ? `${totalHours.toFixed(1)} h` : '—'}</b>
+          <b>{records.status === 'ready' ? `${totalHours.toFixed(1)} h` : '—'}</b>
         </div>
         <div>
           <span>Overtime pay</span>
-          <b>{records.status === 'success' ? money(totalPay) : '—'}</b>
+          <b>{records.status === 'ready' ? money(totalPay) : '—'}</b>
         </div>
         <div>
           <span>Pending review</span>
           <b className={rows.some((r) => !r.reviewed) ? 'danger-text' : ''}>
-            {records.status === 'success' ? rows.filter((r) => !r.reviewed).length : '—'}
+            {records.status === 'ready' ? rows.filter((r) => !r.reviewed).length : '—'}
           </b>
         </div>
         <div>

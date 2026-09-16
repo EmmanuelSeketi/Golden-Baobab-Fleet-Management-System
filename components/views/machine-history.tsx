@@ -276,10 +276,10 @@ export function MachineHistoryView() {
           <MiniState
             status={machines.status}
             error={machines.error}
-            isEmpty={(machines.data ?? []).length === 0 && machines.status === 'success'}
+            isEmpty={(machines.data ?? []).length === 0 && machines.status === 'ready'}
             emptyText="No machines registered yet."
           />
-          {machines.status === 'success' && (machines.data ?? []).length > 0 && (
+          {machines.status === 'ready' && (machines.data ?? []).length > 0 && (
             <div className="mh-empty">
               <Gauge size={26} />
               <b>Select a machine to view its full history</b>
