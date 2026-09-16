@@ -34,25 +34,44 @@ export async function updateSession(request: NextRequest) {
     },
   )
 
+  const { pathname } = request.nextUrl
+  // Public paths that an unauthenticated visitor is allowed to reach.
+  const isPublic =
+    pathname.startsWith('/auth') || pathname.startsWith('/_next') || pathname === '/favicon.ico'
+
   // Do not run code between createServerClient and
   // supabase.auth.getUser(). A simple mistake could make it very hard to debug
   // issues with users being randomly logged out.
 
   // IMPORTANT: If you remove getUser() and you use server-side rendering
   // with the Supabase client, your users may be randomly logged out.
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  //
+  // This call hits the Supabase Auth server on EVERY request. A transient
+  // failure (network blip, timeout, or a 429 rate-limit — Supabase keys auth
+  // limits off IP, and a deployment shares one egress IP across all visitors)
+  // used to throw here and crash the middleware, returning 500 for the whole
+  // site intermittently. We now fail open on public paths and fail safe
+  // (redirect to login) on protected paths, so a momentary Auth hiccup never
+  // takes the deployment down.
+  let user = null
+  let authFailed = false
+  try {
+    const result = await supabase.auth.getUser()
+    user = result.data.user
+  } catch (err) {
+    authFailed = true
+    console.log('[v0] middleware getUser failed:', err instanceof Error ? err.message : err)
+  }
 
-  const { pathname } = request.nextUrl
-  // Public paths that an unauthenticated visitor is allowed to reach.
-  const isPublic =
-    pathname.startsWith('/auth') || pathname.startsWith('/_next') || pathname === '/favicon.ico'
+  // Public paths always pass through, even when auth is unreachable.
+  if (isPublic) {
+    return supabaseResponse
+  }
 
-  // Everything else is the protected workspace. This enforces auth at the
-  // edge/SSR layer, so direct-URL access without a session is redirected to
-  // login — not merely hidden in the client.
-  if (!user && !isPublic) {
+  // Protected path with no session (or auth temporarily unreachable): send to
+  // login rather than crashing. When auth is genuinely down this shows the
+  // login page instead of a 500.
+  if (!user || authFailed) {
     const url = request.nextUrl.clone()
     url.pathname = '/auth/login'
     return NextResponse.redirect(url)
