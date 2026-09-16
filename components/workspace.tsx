@@ -278,7 +278,7 @@ function ActiveView({
     case 'Customers & Contracts':
       return <ContractsView role={role} userId={userId} />
     case 'Billing & Invoices':
-      return <BillingView />
+      return <BillingView role={role} userId={userId} />
     case 'Reports':
       return <ReportsView role={role} />
     case 'Maintenance':
