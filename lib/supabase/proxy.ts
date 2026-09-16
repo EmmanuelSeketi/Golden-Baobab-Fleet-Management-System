@@ -39,39 +39,52 @@ export async function updateSession(request: NextRequest) {
   const isPublic =
     pathname.startsWith('/auth') || pathname.startsWith('/_next') || pathname === '/favicon.ico'
 
-  // Do not run code between createServerClient and
-  // supabase.auth.getUser(). A simple mistake could make it very hard to debug
-  // issues with users being randomly logged out.
-
-  // IMPORTANT: If you remove getUser() and you use server-side rendering
-  // with the Supabase client, your users may be randomly logged out.
+  // Session validation strategy (keeps the site reachable under any load):
   //
-  // This call hits the Supabase Auth server on EVERY request. A transient
-  // failure (network blip, timeout, or a 429 rate-limit — Supabase keys auth
-  // limits off IP, and a deployment shares one egress IP across all visitors)
-  // used to throw here and crash the middleware, returning 500 for the whole
-  // site intermittently. We now fail open on public paths and fail safe
-  // (redirect to login) on protected paths, so a momentary Auth hiccup never
-  // takes the deployment down.
-  let user = null
-  let authFailed = false
+  // We use getClaims() instead of getUser(). getClaims() verifies the session
+  // JWT LOCALLY against the project's signing keys (JWKS), which are fetched
+  // once and cached — so it does NOT hit the Supabase Auth server on every
+  // request. That removes the per-request network dependency that previously
+  // made the site flaky: no round-trip means no timeouts and, critically, no
+  // IP-based 429 rate-limiting during traffic spikes (a deployment shares one
+  // egress IP across all visitors, so getUser()-per-request throttled at load).
+  //
+  // getClaims() still triggers the cookie setAll() above, so token refresh and
+  // session cookies keep working exactly as before.
+  let hasValidSession = false
+  let verificationErrored = false
   try {
-    const result = await supabase.auth.getUser()
-    user = result.data.user
+    const { data, error } = await supabase.auth.getClaims()
+    if (error) {
+      verificationErrored = true
+      console.log('[v0] middleware getClaims error:', error.message)
+    } else {
+      hasValidSession = Boolean(data?.claims)
+    }
   } catch (err) {
-    authFailed = true
-    console.log('[v0] middleware getUser failed:', err instanceof Error ? err.message : err)
+    verificationErrored = true
+    console.log('[v0] middleware getClaims failed:', err instanceof Error ? err.message : err)
   }
 
-  // Public paths always pass through, even when auth is unreachable.
+  // Public paths always pass through, even when verification is unavailable.
   if (isPublic) {
     return supabaseResponse
   }
 
-  // Protected path with no session (or auth temporarily unreachable): send to
-  // login rather than crashing. When auth is genuinely down this shows the
-  // login page instead of a 500.
-  if (!user || authFailed) {
+  if (!hasValidSession) {
+    // Distinguish "no session" from "couldn't verify right now". If a Supabase
+    // auth cookie is present but verification errored (e.g. JWKS momentarily
+    // unreachable), fail OPEN so an already-signed-in user is never locked out
+    // during an outage — the server components still do a full check. Only when
+    // there is genuinely no session do we redirect to login.
+    const hasAuthCookie = request.cookies
+      .getAll()
+      .some((c) => c.name.startsWith('sb-') && c.name.includes('auth-token'))
+
+    if (verificationErrored && hasAuthCookie) {
+      return supabaseResponse
+    }
+
     const url = request.nextUrl.clone()
     url.pathname = '/auth/login'
     return NextResponse.redirect(url)
