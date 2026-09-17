@@ -467,3 +467,14 @@ nav { flex: 1; }.nav-group { margin-bottom: 21px; }.nav-group > small { display:
 .backup-head h2 { font-size: 16px; margin: 0; }
 .backup-head p { font-size: 13px; color: #6b7280; margin: 3px 0 0; max-width: 60ch; }
 .backup-actions { margin-top: 16px; }
+
+/* Daily hours — project filter + grouping */
+.toolbar-spacer { flex: 1; }
+.filter-select { display: flex; align-items: center; gap: 8px; height: 35px; border: 1px solid var(--border); background: #fff; padding: 0 6px 0 11px; border-radius: 5px; color: #536166; font-size: 11px; }
+.filter-select > span { font-weight: 700; color: #8d999d; text-transform: uppercase; letter-spacing: .06em; font-size: 10px; }
+.filter-select select { border: 0; background: transparent; font: inherit; color: #273137; font-weight: 600; padding: 6px 4px; cursor: pointer; outline: none; }
+.group-toggle { display: inline-flex; align-items: center; gap: 7px; cursor: pointer; }
+.group-toggle.active { background: #007a35; border-color: #007a35; color: #fff; }
+.group-header-row td { background: #f4f7f5; border-top: 1px solid var(--border); padding: 9px 14px; }
+.group-header-row .group-name { font-weight: 800; color: #202b31; font-size: 12px; letter-spacing: -.2px; }
+.group-header-row .group-meta { margin-left: 12px; color: #71808a; font-size: 11px; font-weight: 600; }

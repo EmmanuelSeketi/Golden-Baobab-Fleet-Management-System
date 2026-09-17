@@ -1,7 +1,7 @@
 'use client'
 
-import { useRef, useState } from 'react'
-import { AlertTriangle, CalendarDays, Download, FileSpreadsheet } from 'lucide-react'
+import { Fragment, useMemo, useRef, useState } from 'react'
+import { AlertTriangle, CalendarDays, Download, FileSpreadsheet, Layers } from 'lucide-react'
 import { useSupabase } from '@/lib/supabase/use-supabase'
 import { useQuery } from '@/lib/gbi/use-query'
 import { friendlyError, hours as fmtHours, meter, shortDate } from '@/lib/gbi/format'
@@ -56,6 +56,8 @@ export function DailyHoursView() {
   const today = isoDate(new Date())
   const [selectedDate, setSelectedDate] = useState<string>(today)
   const [selected, setSelected] = useState<Entry | null>(null)
+  const [projectFilter, setProjectFilter] = useState<string>('all')
+  const [grouped, setGrouped] = useState(false)
   const dateInputRef = useRef<HTMLInputElement>(null)
 
   const entries = useQuery<Entry[]>(
@@ -71,10 +73,74 @@ export function DailyHoursView() {
   )
 
   const rows = entries.data ?? []
-  const totalHours = rows.reduce((s, r) => s + Number(r.total_hours ?? 0), 0)
-  const flagged = rows.filter((r) => r.flagged_for_review).length
-  const billed = rows.filter((r) => r.is_billed).length
+
+  // Distinct project names present in the day's entries (null → "Unassigned"),
+  // used to populate the project filter and the group headers.
+  const projectNames = useMemo(() => {
+    const set = new Set<string>()
+    for (const r of rows) set.add(r.project?.name ?? 'Unassigned')
+    return Array.from(set).sort((a, b) => a.localeCompare(b))
+  }, [rows])
+
+  // If the active filter no longer matches any entry (e.g. after changing the
+  // date), fall back to showing everything rather than an empty table.
+  const activeFilter = projectFilter !== 'all' && projectNames.includes(projectFilter) ? projectFilter : 'all'
+
+  const visibleRows = useMemo(
+    () => (activeFilter === 'all' ? rows : rows.filter((r) => (r.project?.name ?? 'Unassigned') === activeFilter)),
+    [rows, activeFilter],
+  )
+
+  const groups = useMemo(() => {
+    const map = new Map<string, Entry[]>()
+    for (const r of visibleRows) {
+      const key = r.project?.name ?? 'Unassigned'
+      const list = map.get(key)
+      if (list) list.push(r)
+      else map.set(key, [r])
+    }
+    return Array.from(map.entries())
+      .map(([name, list]) => ({
+        name,
+        list,
+        totalHours: list.reduce((s, r) => s + Number(r.total_hours ?? 0), 0),
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name))
+  }, [visibleRows])
+
+  const totalHours = visibleRows.reduce((s, r) => s + Number(r.total_hours ?? 0), 0)
+  const flagged = visibleRows.filter((r) => r.flagged_for_review).length
+  const billed = visibleRows.filter((r) => r.is_billed).length
   const isToday = selectedDate === today
+
+  function renderRow(r: Entry) {
+    return (
+      <tr key={r.id} className="clickable-row" onClick={() => setSelected(r)}>
+        <td>
+          <b>{r.machine?.machine_number ?? '—'}</b>
+          <div className="muted-cell">{r.machine?.machine_type ?? ''}</div>
+        </td>
+        <td>{r.operator?.full_name ?? '—'}</td>
+        {!grouped && <td>{r.project?.name ?? '—'}</td>}
+        <td>{meter(r.hour_meter_start)}</td>
+        <td>{meter(r.hour_meter_end)}</td>
+        <td>
+          <b>{fmtHours(r.total_hours)}</b>
+        </td>
+        <td>
+          {r.flagged_for_review ? (
+            <StatusBadge tone="red">
+              <AlertTriangle size={11} /> Review
+            </StatusBadge>
+          ) : r.is_billed ? (
+            <StatusBadge tone="green">Billed</StatusBadge>
+          ) : (
+            <StatusBadge tone="blue">Unbilled</StatusBadge>
+          )}
+        </td>
+      </tr>
+    )
+  }
 
   return (
     <div className="page-wrap">
@@ -114,6 +180,29 @@ export function DailyHoursView() {
             Back to today
           </button>
         )}
+
+        <div className="toolbar-spacer" />
+
+        <label className="filter-select">
+          <span>Project</span>
+          <select value={activeFilter} onChange={(e) => setProjectFilter(e.target.value)} aria-label="Filter by project">
+            <option value="all">All projects</option>
+            {projectNames.map((name) => (
+              <option key={name} value={name}>
+                {name}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <button
+          className={`today-button group-toggle${grouped ? ' active' : ''}`}
+          onClick={() => setGrouped((g) => !g)}
+          aria-pressed={grouped}
+        >
+          <Layers size={13} />
+          Group by project
+        </button>
       </div>
 
       <div className="hours-summary">
@@ -145,13 +234,15 @@ export function DailyHoursView() {
         <ViewState
           status={entries.status}
           error={entries.error}
-          isEmpty={rows.length === 0}
+          isEmpty={visibleRows.length === 0}
           title="daily hours"
           emptyTitle={isToday ? 'Nothing submitted yet for today' : 'No entries for this date'}
           emptyText={
-            isToday
-              ? 'Hour entries submitted for today will appear here as operators log them.'
-              : 'No hour entries were recorded on the selected date.'
+            activeFilter !== 'all'
+              ? `No entries for "${activeFilter}" on the selected date.`
+              : isToday
+                ? 'Hour entries submitted for today will appear here as operators log them.'
+                : 'No hour entries were recorded on the selected date.'
           }
           onRetry={entries.reload}
         >
@@ -161,7 +252,7 @@ export function DailyHoursView() {
                 <tr>
                   <th>Machine</th>
                   <th>Operator</th>
-                  <th>Project</th>
+                  {!grouped && <th>Project</th>}
                   <th>Meter start</th>
                   <th>Meter end</th>
                   <th>Total</th>
@@ -169,32 +260,21 @@ export function DailyHoursView() {
                 </tr>
               </thead>
               <tbody>
-                {rows.map((r) => (
-                  <tr key={r.id} className="clickable-row" onClick={() => setSelected(r)}>
-                    <td>
-                      <b>{r.machine?.machine_number ?? '—'}</b>
-                      <div className="muted-cell">{r.machine?.machine_type ?? ''}</div>
-                    </td>
-                    <td>{r.operator?.full_name ?? '—'}</td>
-                    <td>{r.project?.name ?? '—'}</td>
-                    <td>{meter(r.hour_meter_start)}</td>
-                    <td>{meter(r.hour_meter_end)}</td>
-                    <td>
-                      <b>{fmtHours(r.total_hours)}</b>
-                    </td>
-                    <td>
-                      {r.flagged_for_review ? (
-                        <StatusBadge tone="red">
-                          <AlertTriangle size={11} /> Review
-                        </StatusBadge>
-                      ) : r.is_billed ? (
-                        <StatusBadge tone="green">Billed</StatusBadge>
-                      ) : (
-                        <StatusBadge tone="blue">Unbilled</StatusBadge>
-                      )}
-                    </td>
-                  </tr>
-                ))}
+                {grouped
+                  ? groups.map((g) => (
+                      <Fragment key={g.name}>
+                        <tr className="group-header-row">
+                          <td colSpan={6}>
+                            <span className="group-name">{g.name}</span>
+                            <span className="group-meta">
+                              {g.list.length} {g.list.length === 1 ? 'machine' : 'machines'} · {fmtHours(g.totalHours)}
+                            </span>
+                          </td>
+                        </tr>
+                        {g.list.map(renderRow)}
+                      </Fragment>
+                    ))
+                  : visibleRows.map(renderRow)}
               </tbody>
             </table>
           </div>
