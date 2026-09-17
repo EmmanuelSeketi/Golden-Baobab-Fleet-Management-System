@@ -6,9 +6,11 @@ import {
   BarChart3,
   Bell,
   Building2,
+  CalendarDays,
   ChevronRight,
   Clock,
   Hammer,
+  History,
   LayoutDashboard,
   LifeBuoy,
   LogOut,
@@ -16,6 +18,7 @@ import {
   ReceiptText,
   ScrollText,
   Search,
+  Settings,
   Timer,
   Truck,
   Users,
@@ -36,6 +39,8 @@ import { OverviewView } from '@/components/views/overview'
 import { DailyHoursView } from '@/components/views/daily-hours'
 import { FleetView } from '@/components/views/fleet'
 import { OperatorsView } from '@/components/views/operators'
+import { MachineHistoryView } from '@/components/views/machine-history'
+import { CalendarView } from '@/components/views/calendar'
 import { OvertimeView } from '@/components/views/overtime'
 import { ContractsView } from '@/components/views/contracts'
 import { BillingView } from '@/components/views/billing'
@@ -44,6 +49,7 @@ import { MaintenanceView } from '@/components/views/maintenance'
 import { RepairsView } from '@/components/views/repairs'
 import { NotificationsView } from '@/components/views/notifications'
 import { AuditView } from '@/components/views/audit'
+import { SettingsView } from '@/components/views/settings'
 
 type NavItem = { module: Module; label: string; zh: string; icon: React.ElementType }
 type NavGroup = { group: string; zh: string; items: NavItem[] }
@@ -56,6 +62,7 @@ const NAV: NavGroup[] = [
       { module: 'Overview', label: 'Dashboard', zh: '仪表板', icon: LayoutDashboard },
       { module: 'Daily Hours', label: 'Daily Working Hours', zh: '每日工时', icon: Clock },
       { module: 'Fleet', label: 'Fleet Register', zh: '车队登记', icon: Truck },
+      { module: 'Machine History', label: 'Machine History', zh: '机器历史', icon: History },
       { module: 'Operators', label: 'Operators', zh: '操作员', icon: Users },
       { module: 'Overtime', label: 'Operator Overtime', zh: '操作员加班', icon: Timer },
     ],
@@ -75,6 +82,7 @@ const NAV: NavGroup[] = [
     items: [
       { module: 'Maintenance', label: 'Maintenance', zh: '保养', icon: Wrench },
       { module: 'Repairs', label: 'Repairs', zh: '维修', icon: Hammer },
+      { module: 'Calendar', label: 'Calendar', zh: '日历', icon: CalendarDays },
     ],
   },
   {
@@ -83,6 +91,7 @@ const NAV: NavGroup[] = [
     items: [
       { module: 'Notifications', label: 'Notifications', zh: '通知', icon: Bell },
       { module: 'Audit Log', label: 'Audit Log', zh: '审计日志', icon: ScrollText },
+      { module: 'Settings', label: 'Settings & Backup', zh: '设置与备份', icon: Settings },
     ],
   },
 ]
@@ -268,12 +277,16 @@ function ActiveView({
       return <FleetView role={role} userId={userId} />
     case 'Operators':
       return <OperatorsView role={role} userId={userId} />
+      case 'Machine History':
+        return <MachineHistoryView />
+      case 'Calendar':
+        return <CalendarView />
     case 'Overtime':
-      return <OvertimeView />
+      return <OvertimeView role={role} userId={userId} />
     case 'Customers & Contracts':
-      return <ContractsView />
+      return <ContractsView role={role} userId={userId} />
     case 'Billing & Invoices':
-      return <BillingView />
+      return <BillingView role={role} userId={userId} />
     case 'Reports':
       return <ReportsView role={role} />
     case 'Maintenance':
@@ -284,6 +297,8 @@ function ActiveView({
       return <NotificationsView />
     case 'Audit Log':
       return <AuditView />
+    case 'Settings':
+      return <SettingsView userId={userId} />
     default:
       return null
   }

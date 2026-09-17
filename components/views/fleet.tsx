@@ -83,7 +83,8 @@ export function FleetView({ role, userId }: { role: UserRole; userId: string }) 
       (m) =>
         m.machine_number.toLowerCase().includes(q) ||
         m.machine_type.toLowerCase().includes(q) ||
-        (m.manufacturer ?? '').toLowerCase().includes(q),
+        (m.manufacturer ?? '').toLowerCase().includes(q) ||
+        (m.chassis_number ?? '').toLowerCase().includes(q),
     )
   }, [machines.data, query])
 
@@ -135,7 +136,7 @@ export function FleetView({ role, userId }: { role: UserRole; userId: string }) 
       <div className="filter-row">
         <div className="toolbar-search">
           <input
-            placeholder="Search by number, type or manufacturer…"
+            placeholder="Search by number, type, manufacturer or chassis…"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
