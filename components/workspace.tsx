@@ -9,6 +9,7 @@ import {
   CalendarDays,
   ChevronRight,
   Clock,
+  FolderKanban,
   Hammer,
   History,
   LayoutDashboard,
@@ -39,6 +40,7 @@ import { OverviewView } from '@/components/views/overview'
 import { DailyHoursView } from '@/components/views/daily-hours'
 import { FleetView } from '@/components/views/fleet'
 import { OperatorsView } from '@/components/views/operators'
+import { ProjectsView } from '@/components/views/projects'
 import { MachineHistoryView } from '@/components/views/machine-history'
 import { CalendarView } from '@/components/views/calendar'
 import { OvertimeView } from '@/components/views/overtime'
@@ -62,6 +64,7 @@ const NAV: NavGroup[] = [
       { module: 'Overview', label: 'Dashboard', zh: '仪表板', icon: LayoutDashboard },
       { module: 'Daily Hours', label: 'Daily Working Hours', zh: '每日工时', icon: Clock },
       { module: 'Fleet', label: 'Fleet Register', zh: '车队登记', icon: Truck },
+      { module: 'Projects', label: 'Projects & Sites', zh: '项目与工地', icon: FolderKanban },
       { module: 'Machine History', label: 'Machine History', zh: '机器历史', icon: History },
       { module: 'Operators', label: 'Operators', zh: '操作员', icon: Users },
       { module: 'Overtime', label: 'Operator Overtime', zh: '操作员加班', icon: Timer },
@@ -277,6 +280,8 @@ function ActiveView({
       return <FleetView role={role} userId={userId} />
     case 'Operators':
       return <OperatorsView role={role} userId={userId} />
+    case 'Projects':
+      return <ProjectsView role={role} userId={userId} />
       case 'Machine History':
         return <MachineHistoryView />
       case 'Calendar':
