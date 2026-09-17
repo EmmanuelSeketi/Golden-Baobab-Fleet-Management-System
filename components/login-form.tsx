@@ -49,7 +49,6 @@ export function LoginForm() {
         />
         <span className="eyebrow">GBI Group · Fleet operations</span>
         <h1>Welcome back</h1>
-        <p>Sign in to manage fleet operations, people, billing and compliance.</p>
         <form onSubmit={submit}>
           <label htmlFor="login-email">Email address</label>
           <input

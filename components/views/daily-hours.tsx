@@ -5,7 +5,7 @@ import { AlertTriangle, CalendarDays, Download, FileSpreadsheet, Layers } from '
 import { useSupabase } from '@/lib/supabase/use-supabase'
 import { useQuery } from '@/lib/gbi/use-query'
 import { friendlyError, hours as fmtHours, meter, shortDate } from '@/lib/gbi/format'
-import { buildMatrix, exportCsv, exportXlsx, type ExportColumn } from '@/lib/gbi/export'
+import { buildMatrix, exportCsvSections, exportXlsxSheets, type ExportColumn } from '@/lib/gbi/export'
 import { DetailGrid, Modal, PageHeading, StatusBadge, ViewState } from '@/components/shared'
 
 type Entry = {
@@ -50,6 +50,21 @@ const EXPORT_COLUMNS: ExportColumn<Entry>[] = [
   { header: 'Site location', value: (r) => r.site_location ?? '' },
   { header: 'Remarks', value: (r) => r.remarks ?? '' },
 ]
+
+// Group entries by site location for the sectioned export (null/blank →
+// "No site location"), sorted so the exported sheets/blocks are stable.
+function groupBySite(list: Entry[]): { name: string; rows: Entry[] }[] {
+  const map = new Map<string, Entry[]>()
+  for (const r of list) {
+    const key = r.site_location?.trim() || 'No site location'
+    const arr = map.get(key)
+    if (arr) arr.push(r)
+    else map.set(key, [r])
+  }
+  return Array.from(map.entries())
+    .map(([name, rows]) => ({ name, rows }))
+    .sort((a, b) => a.name.localeCompare(b.name))
+}
 
 export function DailyHoursView() {
   const supabase = useSupabase()
@@ -369,13 +384,19 @@ function ExportBar() {
       return
     }
 
-    const { headers, rows } = buildMatrix(list, EXPORT_COLUMNS)
+    // Section the export by Site Location — one worksheet per site in Excel,
+    // one labelled block per site in CSV (which has no real sheets).
+    const sections = groupBySite(list).map((g) => {
+      const { headers, rows } = buildMatrix(g.rows, EXPORT_COLUMNS)
+      return { name: g.name, headers, rows }
+    })
     const base = `daily-working-hours_${from}_to_${to}`
     try {
-      if (kind === 'csv') exportCsv(`${base}.csv`, headers, rows)
-      else await exportXlsx(`${base}.xlsx`, headers, rows, 'Daily Hours')
+      if (kind === 'csv') exportCsvSections(`${base}.csv`, sections)
+      else await exportXlsxSheets(`${base}.xlsx`, sections)
+      const siteWord = sections.length === 1 ? 'site' : 'sites'
       setMessage({
-        text: `Exported ${list.length} ${list.length === 1 ? 'entry' : 'entries'} (${kind.toUpperCase()}).`,
+        text: `Exported ${list.length} ${list.length === 1 ? 'entry' : 'entries'} across ${sections.length} ${siteWord} (${kind.toUpperCase()}).`,
         error: false,
       })
     } catch {

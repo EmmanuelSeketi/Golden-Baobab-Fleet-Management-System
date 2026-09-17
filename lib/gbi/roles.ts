@@ -20,6 +20,7 @@ export type Module =
   | 'Daily Hours'
   | 'Fleet'
   | 'Operators'
+  | 'Projects'
   | 'Overtime'
   | 'Machine History'
   | 'Calendar'
@@ -76,6 +77,14 @@ export function canManageOps(role: UserRole): boolean {
 // read-only commercial access; operations_manager has none.
 export function canManageCommercial(role: UserRole): boolean {
   return role === 'administrator' || role === 'accounts_billing'
+}
+
+// Projects bridge operations and commercial: operations records daily hours
+// against them, while commercial links them to customers for billing. Write
+// access is therefore granted to operations_manager and accounts_billing
+// (plus administrator). Management stays read-only; all roles may read.
+export function canManageProjects(role: UserRole): boolean {
+  return role === 'administrator' || role === 'operations_manager' || role === 'accounts_billing'
 }
 
 // overtime_rule configuration is administrator-only per RLS.
