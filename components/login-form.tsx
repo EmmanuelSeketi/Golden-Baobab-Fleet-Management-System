@@ -75,7 +75,6 @@ export function LoginForm() {
             {loading ? 'Signing in…' : 'Sign in securely'}
           </button>
         </form>
-        <small>Access is managed by your GBI Group administrator.</small>
       </section>
     </main>
   )
