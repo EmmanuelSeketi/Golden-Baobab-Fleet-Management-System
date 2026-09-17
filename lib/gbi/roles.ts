@@ -79,12 +79,12 @@ export function canManageCommercial(role: UserRole): boolean {
   return role === 'administrator' || role === 'accounts_billing'
 }
 
-// Projects bridge operations and commercial: operations records daily hours
-// against them, while commercial links them to customers for billing. Write
-// access is therefore granted to operations_manager and accounts_billing
-// (plus administrator). Management stays read-only; all roles may read.
+// Projects are operational records (operations logs daily hours against them;
+// commercial only links them to customers for billing). Write access mirrors
+// the RLS insert/update policy for the project table — administrator +
+// operations_manager only. Management stays read-only; all roles may read.
 export function canManageProjects(role: UserRole): boolean {
-  return role === 'administrator' || role === 'operations_manager' || role === 'accounts_billing'
+  return role === 'administrator' || role === 'operations_manager'
 }
 
 // overtime_rule configuration is administrator-only per RLS.
