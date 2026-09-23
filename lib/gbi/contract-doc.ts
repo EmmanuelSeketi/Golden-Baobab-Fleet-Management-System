@@ -21,12 +21,24 @@ export type ContractLineItem = {
   delivery: string // transport only
 }
 
+export type LogoChoice = 'gbi' | 'sdlg' | 'none'
+
 export type ContractDocData = {
   contractNumber: string
   lessee: string
   date: string
   equipment: ContractLineItem[]
   transport: ContractLineItem[]
+  logo?: LogoChoice
+}
+
+type LoadedLogo = { data: ArrayBuffer; width: number; height: number }
+
+// Source files live in /public. Dimensions (in points) preserve each logo's
+// aspect ratio: GBI is portrait (~2:3), SDLG is square.
+const LOGO_FILES: Record<Exclude<LogoChoice, 'none'>, { src: string; width: number; height: number }> = {
+  gbi: { src: '/logo-gbi.jpeg', width: 72, height: 108 },
+  sdlg: { src: '/logo-sdlg.jpeg', width: 96, height: 96 },
 }
 
 const VAT_RATE = 0.16
@@ -237,7 +249,7 @@ const CLAUSES: { title: string; lines: string[] }[] = [
   },
 ]
 
-export function buildContractDoc(data: ContractDocData, logo?: ArrayBuffer): Document {
+export function buildContractDoc(data: ContractDocData, logo?: LoadedLogo): Document {
   const children: (Paragraph | Table)[] = []
 
   if (logo) {
@@ -247,9 +259,9 @@ export function buildContractDoc(data: ContractDocData, logo?: ArrayBuffer): Doc
         spacing: { after: 40 },
         children: [
           new ImageRun({
-            data: logo,
-            type: 'png',
-            transformation: { width: 90, height: 90 },
+            data: logo.data,
+            type: 'jpg',
+            transformation: { width: logo.width, height: logo.height },
           }),
         ],
       }),
@@ -322,18 +334,21 @@ export function buildContractDoc(data: ContractDocData, logo?: ArrayBuffer): Doc
   })
 }
 
-async function loadLogo(): Promise<ArrayBuffer | undefined> {
+async function loadLogo(choice: LogoChoice): Promise<LoadedLogo | undefined> {
+  if (choice === 'none') return undefined
+  const meta = LOGO_FILES[choice]
   try {
-    const res = await fetch('/gbi-logo.png')
+    const res = await fetch(meta.src)
     if (!res.ok) return undefined
-    return await res.arrayBuffer()
+    const data = await res.arrayBuffer()
+    return { data, width: meta.width, height: meta.height }
   } catch {
     return undefined
   }
 }
 
 export async function downloadContractDoc(data: ContractDocData): Promise<void> {
-  const logo = await loadLogo()
+  const logo = await loadLogo(data.logo ?? 'gbi')
   const doc = buildContractDoc(data, logo)
   const blob = await Packer.toBlob(doc)
   const url = URL.createObjectURL(blob)

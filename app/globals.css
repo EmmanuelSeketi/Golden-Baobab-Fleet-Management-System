@@ -665,3 +665,19 @@ nav { flex: 1; }.nav-group { margin-bottom: 21px; }.nav-group > small { display:
   color: var(--destructive);
   border-color: var(--destructive);
 }
+
+/* Daily-hours entry table: keep the Save/Edit action column visible without
+   horizontal scrolling by pinning the last column to the right edge. */
+.hours-entry-table th:last-child,
+.hours-entry-table td:last-child {
+  position: sticky;
+  right: 0;
+  z-index: 1;
+  box-shadow: -8px 0 8px -8px rgba(0, 0, 0, 0.18);
+}
+.hours-entry-table td:last-child {
+  background: var(--card);
+}
+.hours-entry-table th:last-child {
+  background: #fafbfb;
+}

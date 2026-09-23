@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { Download, Plus, Trash2 } from 'lucide-react'
 import { Modal, ModalSection } from '@/components/shared'
-import { downloadContractDoc, type ContractLineItem } from '@/lib/gbi/contract-doc'
+import { downloadContractDoc, type ContractLineItem, type LogoChoice } from '@/lib/gbi/contract-doc'
 
 type CustomerOption = { id: string; company_name: string }
 
@@ -30,6 +30,7 @@ export function ContractDocModal({
   const [contractNumber, setContractNumber] = useState('')
   const [lessee, setLessee] = useState('')
   const [date, setDate] = useState('')
+  const [logo, setLogo] = useState<LogoChoice>('gbi')
   const [equipment, setEquipment] = useState<ContractLineItem[]>([emptyEquip()])
   const [transport, setTransport] = useState<ContractLineItem[]>([emptyTransport()])
   const [busy, setBusy] = useState(false)
@@ -39,6 +40,7 @@ export function ContractDocModal({
       setContractNumber(defaultContractNumber ?? '')
       setLessee(defaultLessee ?? '')
       setDate(new Date().toISOString().slice(0, 10))
+      setLogo('gbi')
       setEquipment([emptyEquip()])
       setTransport([emptyTransport()])
     }
@@ -54,7 +56,7 @@ export function ContractDocModal({
   async function generate() {
     setBusy(true)
     try {
-      await downloadContractDoc({ contractNumber, lessee, date, equipment, transport })
+      await downloadContractDoc({ contractNumber, lessee, date, equipment, transport, logo })
       onClose()
     } finally {
       setBusy(false)
@@ -102,6 +104,14 @@ export function ContractDocModal({
               <option key={c.id} value={c.company_name} />
             ))}
           </datalist>
+        </label>
+        <label className="field field-full">
+          <span>Header logo</span>
+          <select value={logo} onChange={(e) => setLogo(e.target.value as LogoChoice)}>
+            <option value="gbi">GBI Group</option>
+            <option value="sdlg">SDLG</option>
+            <option value="none">No logo</option>
+          </select>
         </label>
       </div>
 
