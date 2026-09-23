@@ -580,6 +580,37 @@ nav { flex: 1; }.nav-group { margin-bottom: 21px; }.nav-group > small { display:
 
 .field-full { grid-column: 1 / -1; }
 
+/* ---- Labeled fields used by the contract document modal ---- */
+.field { display: flex; flex-direction: column; gap: 7px; min-width: 0; }
+.field > span { font-size: 11.5px; font-weight: 700; color: #46545a; letter-spacing: 0.01em; }
+.field input,
+.field select,
+.field textarea {
+  border: 1px solid #c4ccce;
+  border-radius: 8px;
+  padding: 11px 12px;
+  font-size: 13px;
+  line-height: 1.3;
+  color: var(--foreground);
+  background: #fff;
+  width: 100%;
+  font-family: inherit;
+  transition: border-color .15s ease, box-shadow .15s ease;
+}
+.field input::placeholder,
+.field textarea::placeholder { color: #9aa6ab; }
+.field input:hover,
+.field select:hover,
+.field textarea:hover { border-color: #a9b4b6; }
+.field input:focus,
+.field select:focus,
+.field textarea:focus {
+  outline: 0;
+  border-color: #009943;
+  box-shadow: 0 0 0 3px #00994322;
+}
+.field textarea { min-height: 66px; resize: vertical; }
+
 .form-hint {
   margin: 0 0 0.6rem;
   font-size: 0.8rem;
