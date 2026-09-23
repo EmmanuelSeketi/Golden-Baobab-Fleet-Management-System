@@ -150,7 +150,6 @@ export function ContractsView({ role, userId }: { role: UserRole; userId: string
           </div>
         }
       />
-      {templateMessage && <p className="form-error">{templateMessage}</p>}
 
       <div className="filter-row">
         <div className="seg-tabs">
