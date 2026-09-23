@@ -577,3 +577,52 @@ nav { flex: 1; }.nav-group { margin-bottom: 21px; }.nav-group > small { display:
   width: 100%;
   justify-content: center;
 }
+
+.field-full { grid-column: 1 / -1; }
+
+.form-hint {
+  margin: 0 0 0.6rem;
+  font-size: 0.8rem;
+  color: var(--muted-foreground);
+}
+
+.doc-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.doc-line-grid {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 2fr 1.2fr 0.6fr 1.2fr 1fr;
+  gap: 8px;
+}
+
+.doc-line-grid input {
+  width: 100%;
+}
+
+.doc-line-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--card);
+  color: var(--muted-foreground);
+  cursor: pointer;
+}
+
+.doc-line-remove:hover {
+  color: var(--destructive);
+  border-color: var(--destructive);
+}
+
+@media (max-width: 720px) {
+  .doc-line-grid { grid-template-columns: 1fr 1fr; }
+}

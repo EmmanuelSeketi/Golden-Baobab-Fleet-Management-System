@@ -17,13 +17,12 @@ import {
   StatusBadge,
   ViewState,
 } from '@/components/shared'
+import { ContractDocModal } from '@/components/views/contract-doc-modal'
 
 const CONTRACT_STATUSES = ['draft', 'active', 'expired', 'terminated']
 const BILLING_FREQUENCIES = ['weekly', 'monthly', 'quarterly', 'annually']
 const BILLING_MODELS = ['hourly', 'daily', 'weekly', 'monthly', 'fixed']
 const CURRENCIES = ['ZMW', 'USD', 'ZAR', 'EUR']
-// Replace with the exact path after the DOCX is uploaded to the private bucket.
-const CONTRACT_TEMPLATE_PATH = '[FILL IN EXACT FILENAME AFTER UPLOADING]'
 
 type Contract = {
   id: string
@@ -69,23 +68,7 @@ export function ContractsView({ role, userId }: { role: UserRole; userId: string
   const [tab, setTab] = useState<'contracts' | 'customers'>('contracts')
   const [query, setQuery] = useState('')
   const canManage = canManageCommercial(role)
-  const [templateMessage, setTemplateMessage] = useState('')
-
-  async function downloadContractTemplate() {
-    if (CONTRACT_TEMPLATE_PATH.startsWith('[')) {
-      setTemplateMessage('Set CONTRACT_TEMPLATE_PATH to the exact uploaded DOCX filename first.')
-      return
-    }
-    const { data, error } = await supabase.storage.from('documents').createSignedUrl(CONTRACT_TEMPLATE_PATH, 60)
-    if (error || !data?.signedUrl) {
-      setTemplateMessage(error?.message ?? 'Unable to create a download link.')
-      return
-    }
-    const anchor = document.createElement('a')
-    anchor.href = data.signedUrl
-    anchor.download = CONTRACT_TEMPLATE_PATH.split('/').pop() ?? 'GBI-contract-template.docx'
-    anchor.click()
-  }
+  const [docModal, setDocModal] = useState<{ contractNumber?: string; lessee?: string } | null>(null)
 
   // Contract state
   const [selected, setSelected] = useState<Contract | null>(null)
@@ -146,9 +129,9 @@ export function ContractsView({ role, userId }: { role: UserRole; userId: string
         description="Signed agreements, the machines they cover and the effective billing rules per contract."
         action={
           <div className="heading-actions">
-            {role === 'administrator' && (
-              <button className="button button-secondary" onClick={downloadContractTemplate}>
-                <Download size={14} /> Download template
+            {canManage && (
+              <button className="button button-secondary" onClick={() => setDocModal({})}>
+                <Download size={14} /> Generate contract
               </button>
             )}
             {canManage && (
@@ -311,10 +294,23 @@ export function ContractsView({ role, userId }: { role: UserRole; userId: string
         </div>
       )}
 
+      {canManage && (
+        <ContractDocModal
+          open={!!docModal}
+          customers={(customers.data ?? []).map((c) => ({ id: c.id, company_name: c.company_name }))}
+          defaultContractNumber={docModal?.contractNumber}
+          defaultLessee={docModal?.lessee}
+          onClose={() => setDocModal(null)}
+        />
+      )}
+
       <ContractModal
         contract={selected}
         canManage={canManage}
         userId={userId}
+        onGenerateDoc={() =>
+          selected && setDocModal({ contractNumber: selected.contract_number, lessee: selected.customer?.company_name })
+        }
         onEdit={() => selected && setContractForm({ mode: 'edit', row: selected })}
         onClose={() => setSelected(null)}
       />
@@ -396,12 +392,14 @@ function ContractModal({
   canManage,
   userId,
   onEdit,
+  onGenerateDoc,
   onClose,
 }: {
   contract: Contract | null
   canManage: boolean
   userId: string
   onEdit: () => void
+  onGenerateDoc: () => void
   onClose: () => void
 }) {
   const supabase = useSupabase()
@@ -479,6 +477,10 @@ function ContractModal({
               <StatusBadge tone={contractStatusTone(contract.status)}>{titleCase(contract.status)}</StatusBadge>
               {canManage && (
                 <div className="modal-foot-actions">
+                  <button className="button button-secondary" onClick={onGenerateDoc}>
+                    <Download size={14} />
+                    Generate document
+                  </button>
                   <button className="button button-secondary" onClick={onEdit}>
                     <Pencil size={14} />
                     Edit contract
