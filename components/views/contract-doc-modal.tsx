@@ -116,19 +116,37 @@ export function ContractDocModal({
       >
         <p className="form-hint">16% VAT and the VAT-inclusive totals are calculated automatically in the document.</p>
         {equipment.map((row, i) => (
-          <div className="doc-line" key={i}>
-            <div className="doc-line-grid">
-              <input placeholder="Description 货品" value={row.description} onChange={(e) => patchEquip(i, 'description', e.target.value)} />
-              <input placeholder="Model 型号" value={row.model} onChange={(e) => patchEquip(i, 'model', e.target.value)} />
-              <input placeholder="Qty" value={row.qty} onChange={(e) => patchEquip(i, 'qty', e.target.value)} />
-              <input placeholder="USD/month (excl. VAT)" value={row.amount} onChange={(e) => patchEquip(i, 'amount', e.target.value)} />
-              <input placeholder="Period (months)" value={row.period} onChange={(e) => patchEquip(i, 'period', e.target.value)} />
+          <div className="doc-line-card" key={i}>
+            <div className="doc-line-card-head">
+              <span className="doc-line-badge">Item {i + 1}</span>
+              {equipment.length > 1 && (
+                <button className="doc-line-remove" onClick={() => setEquipment((r) => r.filter((_, x) => x !== i))} aria-label="Remove item">
+                  <Trash2 size={14} /> Remove
+                </button>
+              )}
             </div>
-            {equipment.length > 1 && (
-              <button className="doc-line-remove" onClick={() => setEquipment((r) => r.filter((_, x) => x !== i))} aria-label="Remove line">
-                <Trash2 size={14} />
-              </button>
-            )}
+            <div className="form-grid">
+              <label className="field field-full">
+                <span>Description 货品</span>
+                <input placeholder="e.g. Excavator 挖掘机" value={row.description} onChange={(e) => patchEquip(i, 'description', e.target.value)} />
+              </label>
+              <label className="field">
+                <span>Model 型号</span>
+                <input placeholder="e.g. CAT 320D" value={row.model} onChange={(e) => patchEquip(i, 'model', e.target.value)} />
+              </label>
+              <label className="field">
+                <span>Quantity 数量</span>
+                <input inputMode="numeric" placeholder="1" value={row.qty} onChange={(e) => patchEquip(i, 'qty', e.target.value)} />
+              </label>
+              <label className="field">
+                <span>Rate — USD / month (excl. VAT)</span>
+                <input inputMode="decimal" placeholder="0.00" value={row.amount} onChange={(e) => patchEquip(i, 'amount', e.target.value)} />
+              </label>
+              <label className="field">
+                <span>Period (months)</span>
+                <input inputMode="numeric" placeholder="2" value={row.period} onChange={(e) => patchEquip(i, 'period', e.target.value)} />
+              </label>
+            </div>
           </div>
         ))}
       </ModalSection>
@@ -143,19 +161,37 @@ export function ContractDocModal({
         }
       >
         {transport.map((row, i) => (
-          <div className="doc-line" key={i}>
-            <div className="doc-line-grid">
-              <input placeholder="Description" value={row.description} onChange={(e) => patchTransport(i, 'description', e.target.value)} />
-              <input placeholder="Model" value={row.model} onChange={(e) => patchTransport(i, 'model', e.target.value)} />
-              <input placeholder="Qty" value={row.qty} onChange={(e) => patchTransport(i, 'qty', e.target.value)} />
-              <input placeholder="ZMW (excl. VAT)" value={row.amount} onChange={(e) => patchTransport(i, 'amount', e.target.value)} />
-              <input placeholder="Delivery" value={row.delivery} onChange={(e) => patchTransport(i, 'delivery', e.target.value)} />
+          <div className="doc-line-card" key={i}>
+            <div className="doc-line-card-head">
+              <span className="doc-line-badge">Item {i + 1}</span>
+              {transport.length > 1 && (
+                <button className="doc-line-remove" onClick={() => setTransport((r) => r.filter((_, x) => x !== i))} aria-label="Remove item">
+                  <Trash2 size={14} /> Remove
+                </button>
+              )}
             </div>
-            {transport.length > 1 && (
-              <button className="doc-line-remove" onClick={() => setTransport((r) => r.filter((_, x) => x !== i))} aria-label="Remove line">
-                <Trash2 size={14} />
-              </button>
-            )}
+            <div className="form-grid">
+              <label className="field field-full">
+                <span>Description</span>
+                <input placeholder="e.g. Low-bed transport 平板运输" value={row.description} onChange={(e) => patchTransport(i, 'description', e.target.value)} />
+              </label>
+              <label className="field">
+                <span>Model</span>
+                <input placeholder="Optional" value={row.model} onChange={(e) => patchTransport(i, 'model', e.target.value)} />
+              </label>
+              <label className="field">
+                <span>Quantity</span>
+                <input inputMode="numeric" placeholder="1" value={row.qty} onChange={(e) => patchTransport(i, 'qty', e.target.value)} />
+              </label>
+              <label className="field">
+                <span>Amount — ZMW (excl. VAT)</span>
+                <input inputMode="decimal" placeholder="0.00" value={row.amount} onChange={(e) => patchTransport(i, 'amount', e.target.value)} />
+              </label>
+              <label className="field">
+                <span>Delivery</span>
+                <input placeholder="ONE WAY" value={row.delivery} onChange={(e) => patchTransport(i, 'delivery', e.target.value)} />
+              </label>
+            </div>
           </div>
         ))}
       </ModalSection>

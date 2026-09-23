@@ -2,7 +2,7 @@ import {
   AlignmentType,
   BorderStyle,
   Document,
-  HeadingLevel,
+  ImageRun,
   Packer,
   Paragraph,
   Table,
@@ -237,8 +237,24 @@ const CLAUSES: { title: string; lines: string[] }[] = [
   },
 ]
 
-export function buildContractDoc(data: ContractDocData): Document {
+export function buildContractDoc(data: ContractDocData, logo?: ArrayBuffer): Document {
   const children: (Paragraph | Table)[] = []
+
+  if (logo) {
+    children.push(
+      new Paragraph({
+        alignment: AlignmentType.CENTER,
+        spacing: { after: 40 },
+        children: [
+          new ImageRun({
+            data: logo,
+            type: 'png',
+            transformation: { width: 90, height: 90 },
+          }),
+        ],
+      }),
+    )
+  }
 
   children.push(
     new Paragraph({
@@ -306,8 +322,19 @@ export function buildContractDoc(data: ContractDocData): Document {
   })
 }
 
+async function loadLogo(): Promise<ArrayBuffer | undefined> {
+  try {
+    const res = await fetch('/gbi-logo.png')
+    if (!res.ok) return undefined
+    return await res.arrayBuffer()
+  } catch {
+    return undefined
+  }
+}
+
 export async function downloadContractDoc(data: ContractDocData): Promise<void> {
-  const doc = buildContractDoc(data)
+  const logo = await loadLogo()
+  const doc = buildContractDoc(data, logo)
   const blob = await Packer.toBlob(doc)
   const url = URL.createObjectURL(blob)
   const anchor = document.createElement('a')

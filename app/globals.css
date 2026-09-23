@@ -586,31 +586,42 @@ nav { flex: 1; }.nav-group { margin-bottom: 21px; }.nav-group > small { display:
   color: var(--muted-foreground);
 }
 
-.doc-line {
+.doc-line-card {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--muted);
+  padding: 14px;
+  margin-bottom: 12px;
+}
+
+.doc-line-card-head {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-bottom: 8px;
+  justify-content: space-between;
+  margin-bottom: 12px;
 }
 
-.doc-line-grid {
-  flex: 1;
-  display: grid;
-  grid-template-columns: 2fr 1.2fr 0.6fr 1.2fr 1fr;
-  gap: 8px;
-}
-
-.doc-line-grid input {
-  width: 100%;
+.doc-line-badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted-foreground);
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 3px 10px;
 }
 
 .doc-line-remove {
   display: inline-flex;
   align-items: center;
-  justify-content: center;
-  width: 34px;
-  height: 34px;
-  flex-shrink: 0;
+  gap: 5px;
+  height: 28px;
+  padding: 0 10px;
+  font-size: 0.78rem;
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--card);
@@ -621,8 +632,4 @@ nav { flex: 1; }.nav-group { margin-bottom: 21px; }.nav-group > small { display:
 .doc-line-remove:hover {
   color: var(--destructive);
   border-color: var(--destructive);
-}
-
-@media (max-width: 720px) {
-  .doc-line-grid { grid-template-columns: 1fr 1fr; }
 }
