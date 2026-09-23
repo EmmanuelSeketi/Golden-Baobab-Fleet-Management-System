@@ -32,20 +32,28 @@ function draftTotal(draft: Draft): number | null {
   return end - start
 }
 
-// A machine's hour meter can't physically advance more than a full day. Anything
-// above this in a single day is treated as an abnormal jump and flagged for review.
-const ABNORMAL_DAILY_HOURS = 20
-
-// Flag a reading for review when the day's hours are abnormally high (bad meter
-// read / data-entry error) or when the start meter is below the machine's last
-// known reading (the meter appears to have gone backwards).
-function isAbnormal(start: number, end: number, previousMeter: number | null): boolean {
-  if (end - start > ABNORMAL_DAILY_HOURS) return true
+// Flag a reading for review when the day's hours exceed the company's normal
+// working-hours rule, or when the start meter is below the machine's last known
+// reading (the meter appears to have gone backwards).
+function isAbnormal(start: number, end: number, previousMeter: number | null, normalHours: number): boolean {
+  if (end - start > normalHours) return true
   if (previousMeter != null && start < previousMeter) return true
   return false
 }
 
-export function DailyHoursEntry({ role, userId, date, onSaved }: { role: UserRole; userId: string; date: string; onSaved: () => void }) {
+export function DailyHoursEntry({
+  role,
+  userId,
+  date,
+  normalHours,
+  onSaved,
+}: {
+  role: UserRole
+  userId: string
+  date: string
+  normalHours: number
+  onSaved: () => void
+}) {
   const supabase = useSupabase()
   const canWrite = role === 'administrator' || role === 'operations_manager'
   const [drafts, setDrafts] = useState<Record<string, Draft>>({})
@@ -112,7 +120,7 @@ export function DailyHoursEntry({ role, userId, date, onSaved }: { role: UserRol
       hour_meter_start: start,
       hour_meter_end: end,
       remarks: draft.remarks.trim() || null,
-      flagged_for_review: isAbnormal(start, end, machine.current_hour_meter),
+      flagged_for_review: isAbnormal(start, end, machine.current_hour_meter, normalHours),
       updated_by: userId,
     }
     const result = old
@@ -202,7 +210,13 @@ export function DailyHoursEntry({ role, userId, date, onSaved }: { role: UserRol
                     />
                   </td>
                   <td>
-                    <b>{total === null ? '—' : fmtHours(total)}</b>
+                    {total !== null && total > normalHours ? (
+                      <b className="danger-text" title="Abnormal, Needs review">
+                        {fmtHours(total)}
+                      </b>
+                    ) : (
+                      <b>{total === null ? '—' : fmtHours(total)}</b>
+                    )}
                   </td>
                   <td>
                     <input
