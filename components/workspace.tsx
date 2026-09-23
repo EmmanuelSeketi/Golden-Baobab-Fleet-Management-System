@@ -8,6 +8,7 @@ import {
   Building2,
   CalendarDays,
   ChevronRight,
+  ClipboardCheck,
   Clock,
   FolderKanban,
   Hammer,
@@ -41,6 +42,7 @@ import { DailyHoursView } from '@/components/views/daily-hours'
 import { FleetView } from '@/components/views/fleet'
 import { OperatorsView } from '@/components/views/operators'
 import { ProjectsView } from '@/components/views/projects'
+import { EquipmentLifecycleView } from '@/components/views/equipment-lifecycle'
 import { MachineHistoryView } from '@/components/views/machine-history'
 import { CalendarView } from '@/components/views/calendar'
 import { OvertimeView } from '@/components/views/overtime'
@@ -65,6 +67,7 @@ const NAV: NavGroup[] = [
       { module: 'Daily Hours', label: 'Daily Working Hours', zh: '每日工时', icon: Clock },
       { module: 'Fleet', label: 'Fleet Register', zh: '车队登记', icon: Truck },
       { module: 'Projects', label: 'Projects & Sites', zh: '项目与工地', icon: FolderKanban },
+      { module: 'Equipment Lifecycle', label: 'Equipment Lifecycle', zh: '设备生命周期', icon: ClipboardCheck },
       { module: 'Machine History', label: 'Machine History', zh: '机器历史', icon: History },
       { module: 'Operators', label: 'Operators', zh: '操作员', icon: Users },
       { module: 'Overtime', label: 'Operator Overtime', zh: '操作员加班', icon: Timer },
@@ -275,14 +278,16 @@ function ActiveView({
     case 'Overview':
       return <OverviewView role={role} fullName={fullName} />
     case 'Daily Hours':
-      return <DailyHoursView />
+      return <DailyHoursView role={role} userId={userId} />
     case 'Fleet':
       return <FleetView role={role} userId={userId} />
     case 'Operators':
       return <OperatorsView role={role} userId={userId} />
     case 'Projects':
       return <ProjectsView role={role} userId={userId} />
-      case 'Machine History':
+    case 'Equipment Lifecycle':
+      return <EquipmentLifecycleView role={role} userId={userId} />
+    case 'Machine History':
         return <MachineHistoryView />
       case 'Calendar':
         return <CalendarView />

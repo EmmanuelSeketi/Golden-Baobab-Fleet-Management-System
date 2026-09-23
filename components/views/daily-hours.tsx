@@ -1,12 +1,25 @@
 'use client'
 
 import { Fragment, useMemo, useRef, useState } from 'react'
-import { AlertTriangle, CalendarDays, Download, FileSpreadsheet, Layers } from 'lucide-react'
+import { AlertTriangle, CalendarDays, Download, FileSpreadsheet, Layers, SlidersHorizontal } from 'lucide-react'
 import { useSupabase } from '@/lib/supabase/use-supabase'
 import { useQuery } from '@/lib/gbi/use-query'
 import { friendlyError, hours as fmtHours, meter, shortDate } from '@/lib/gbi/format'
 import { buildMatrix, exportCsvSections, exportXlsxSheets, type ExportColumn } from '@/lib/gbi/export'
 import { DetailGrid, Modal, PageHeading, StatusBadge, ViewState } from '@/components/shared'
+import { DailyHoursEntry } from '@/components/views/daily-hours-entry'
+import { DailyHoursSettingsModal } from '@/components/views/daily-hours-settings-modal'
+import type { UserRole } from '@/lib/gbi/roles'
+
+const DEFAULT_NORMAL_HOURS = 8
+
+// A day's total is abnormal (needs review) when it exceeds the company's normal
+// working-hours rule, or when it was already flagged at entry (e.g. the meter
+// went backwards).
+function isAbnormalEntry(entry: Entry, normalHours: number): boolean {
+  if (entry.flagged_for_review) return true
+  return entry.total_hours != null && Number(entry.total_hours) > normalHours
+}
 
 type Entry = {
   id: string
@@ -18,14 +31,14 @@ type Entry = {
   is_billed: boolean
   remarks: string | null
   site_location: string | null
-  machine: { machine_number: string; machine_type: string } | null
+  machine: { machine_number: string; machine_type: string; chassis_number: string | null } | null
   operator: { full_name: string } | null
   project: { name: string } | null
   customer: { company_name: string } | null
 }
 
 const SELECT =
-  'id,entry_date,hour_meter_start,hour_meter_end,total_hours,flagged_for_review,is_billed,remarks,site_location,machine:machine_id(machine_number,machine_type),operator:operator_id(full_name),project:project_id(name),customer:customer_id(company_name)'
+  'id,entry_date,hour_meter_start,hour_meter_end,total_hours,flagged_for_review,is_billed,remarks,site_location,machine:machine_id(machine_number,machine_type,chassis_number),operator:operator_id(full_name),project:project_id(name),customer:customer_id(company_name)'
 
 // Local calendar date as YYYY-MM-DD (avoids UTC shifting the day near midnight).
 function isoDate(d: Date): string {
@@ -66,14 +79,28 @@ function groupBySite(list: Entry[]): { name: string; rows: Entry[] }[] {
     .sort((a, b) => a.name.localeCompare(b.name))
 }
 
-export function DailyHoursView() {
+export function DailyHoursView({ role, userId }: { role: UserRole; userId: string }) {
   const supabase = useSupabase()
   const today = isoDate(new Date())
   const [selectedDate, setSelectedDate] = useState<string>(today)
   const [selected, setSelected] = useState<Entry | null>(null)
   const [projectFilter, setProjectFilter] = useState<string>('all')
   const [grouped, setGrouped] = useState(false)
+  const [settingsOpen, setSettingsOpen] = useState(false)
   const dateInputRef = useRef<HTMLInputElement>(null)
+  const canManageRule = role === 'administrator' || role === 'operations_manager'
+
+  // Company-wide normal working-hours rule. Falls back to the default if the
+  // setting row/table is not present yet.
+  const setting = useQuery<{ normal_working_hours: number }[]>(
+    () =>
+      supabase.from('operating_hours_setting').select('normal_working_hours').limit(1) as unknown as PromiseLike<{
+        data: { normal_working_hours: number }[] | null
+        error: unknown
+      }>,
+    [],
+  )
+  const normalHours = Number(setting.data?.[0]?.normal_working_hours ?? DEFAULT_NORMAL_HOURS) || DEFAULT_NORMAL_HOURS
 
   const entries = useQuery<Entry[]>(
     () =>
@@ -124,26 +151,34 @@ export function DailyHoursView() {
   }, [visibleRows])
 
   const totalHours = visibleRows.reduce((s, r) => s + Number(r.total_hours ?? 0), 0)
-  const flagged = visibleRows.filter((r) => r.flagged_for_review).length
+  const flagged = visibleRows.filter((r) => isAbnormalEntry(r, normalHours)).length
   const billed = visibleRows.filter((r) => r.is_billed).length
   const isToday = selectedDate === today
 
   function renderRow(r: Entry) {
+    const abnormal = isAbnormalEntry(r, normalHours)
     return (
       <tr key={r.id} className="clickable-row" onClick={() => setSelected(r)}>
         <td>
           <b>{r.machine?.machine_number ?? '—'}</b>
           <div className="muted-cell">{r.machine?.machine_type ?? ''}</div>
         </td>
+        <td>{r.machine?.chassis_number ?? '—'}</td>
         <td>{r.operator?.full_name ?? '—'}</td>
         {!grouped && <td>{r.project?.name ?? '—'}</td>}
         <td>{meter(r.hour_meter_start)}</td>
         <td>{meter(r.hour_meter_end)}</td>
         <td>
-          <b>{fmtHours(r.total_hours)}</b>
+          {abnormal ? (
+            <b className="danger-text" title="Abnormal, Needs review">
+              {fmtHours(r.total_hours)}
+            </b>
+          ) : (
+            <b>{fmtHours(r.total_hours)}</b>
+          )}
         </td>
         <td>
-          {r.flagged_for_review ? (
+          {abnormal ? (
             <StatusBadge tone="red">
               <AlertTriangle size={11} /> Review
             </StatusBadge>
@@ -163,9 +198,19 @@ export function DailyHoursView() {
         eyebrow="Operations"
         title="Daily Working Hours"
         description="Hour-meter readings captured per machine, per day, with review flags for abnormal jumps."
+        action={
+          canManageRule ? (
+            <button className="button button-secondary" onClick={() => setSettingsOpen(true)}>
+              <SlidersHorizontal size={15} />
+              Working hours rule
+            </button>
+          ) : undefined
+        }
       />
 
       <ExportBar />
+
+      <DailyHoursEntry role={role} userId={userId} date={selectedDate} normalHours={normalHours} onSaved={entries.reload} />
 
       <div className="hours-toolbar">
         <label
@@ -266,6 +311,7 @@ export function DailyHoursView() {
               <thead>
                 <tr>
                   <th>Machine</th>
+                  <th>Chassis No</th>
                   <th>Operator</th>
                   {!grouped && <th>Project</th>}
                   <th>Meter start</th>
@@ -279,7 +325,7 @@ export function DailyHoursView() {
                   ? groups.map((g) => (
                       <Fragment key={g.name}>
                         <tr className="group-header-row">
-                          <td colSpan={6}>
+                          <td colSpan={7}>
                             <span className="group-name">{g.name}</span>
                             <span className="group-meta">
                               {g.list.length} {g.list.length === 1 ? 'machine' : 'machines'} · {fmtHours(g.totalHours)}
@@ -295,6 +341,14 @@ export function DailyHoursView() {
           </div>
         </ViewState>
       </div>
+
+      <DailyHoursSettingsModal
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        currentHours={normalHours}
+        userId={userId}
+        onSaved={setting.reload}
+      />
 
       <Modal
         open={!!selected}

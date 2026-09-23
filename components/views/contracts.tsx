@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { AlertTriangle, Building2, Eye, Pencil, Plus, ScrollText } from 'lucide-react'
+import { AlertTriangle, Building2, Download, Eye, Pencil, Plus, ScrollText } from 'lucide-react'
 import { useSupabase } from '@/lib/supabase/use-supabase'
 import { useQuery } from '@/lib/gbi/use-query'
 import { contractStatusTone, invoiceStatusTone, money, shortDate, titleCase } from '@/lib/gbi/format'
@@ -17,6 +17,7 @@ import {
   StatusBadge,
   ViewState,
 } from '@/components/shared'
+import { ContractDocModal } from '@/components/views/contract-doc-modal'
 
 const CONTRACT_STATUSES = ['draft', 'active', 'expired', 'terminated']
 const BILLING_FREQUENCIES = ['weekly', 'monthly', 'quarterly', 'annually']
@@ -67,6 +68,7 @@ export function ContractsView({ role, userId }: { role: UserRole; userId: string
   const [tab, setTab] = useState<'contracts' | 'customers'>('contracts')
   const [query, setQuery] = useState('')
   const canManage = canManageCommercial(role)
+  const [docModal, setDocModal] = useState<{ contractNumber?: string; lessee?: string } | null>(null)
 
   // Contract state
   const [selected, setSelected] = useState<Contract | null>(null)
@@ -126,19 +128,26 @@ export function ContractsView({ role, userId }: { role: UserRole; userId: string
         title="Customers & Contracts"
         description="Signed agreements, the machines they cover and the effective billing rules per contract."
         action={
-          canManage ? (
-            <button
-              className="button button-primary"
-              onClick={() =>
-                tab === 'contracts'
-                  ? setContractForm({ mode: 'add', row: null })
-                  : setCustomerForm({ mode: 'add', row: null })
-              }
-            >
-              <Plus size={15} />
-              {tab === 'contracts' ? 'New contract' : 'New customer'}
-            </button>
-          ) : undefined
+          <div className="heading-actions">
+            {canManage && (
+              <button className="button button-secondary" onClick={() => setDocModal({})}>
+                <Download size={14} /> Generate contract
+              </button>
+            )}
+            {canManage && (
+              <button
+                className="button button-primary"
+                onClick={() =>
+                  tab === 'contracts'
+                    ? setContractForm({ mode: 'add', row: null })
+                    : setCustomerForm({ mode: 'add', row: null })
+                }
+              >
+                <Plus size={15} />
+                {tab === 'contracts' ? 'New contract' : 'New customer'}
+              </button>
+            )}
+          </div>
         }
       />
 
@@ -284,10 +293,23 @@ export function ContractsView({ role, userId }: { role: UserRole; userId: string
         </div>
       )}
 
+      {canManage && (
+        <ContractDocModal
+          open={!!docModal}
+          customers={(customers.data ?? []).map((c) => ({ id: c.id, company_name: c.company_name }))}
+          defaultContractNumber={docModal?.contractNumber}
+          defaultLessee={docModal?.lessee}
+          onClose={() => setDocModal(null)}
+        />
+      )}
+
       <ContractModal
         contract={selected}
         canManage={canManage}
         userId={userId}
+        onGenerateDoc={() =>
+          selected && setDocModal({ contractNumber: selected.contract_number, lessee: selected.customer?.company_name })
+        }
         onEdit={() => selected && setContractForm({ mode: 'edit', row: selected })}
         onClose={() => setSelected(null)}
       />
@@ -369,12 +391,14 @@ function ContractModal({
   canManage,
   userId,
   onEdit,
+  onGenerateDoc,
   onClose,
 }: {
   contract: Contract | null
   canManage: boolean
   userId: string
   onEdit: () => void
+  onGenerateDoc: () => void
   onClose: () => void
 }) {
   const supabase = useSupabase()
@@ -452,6 +476,10 @@ function ContractModal({
               <StatusBadge tone={contractStatusTone(contract.status)}>{titleCase(contract.status)}</StatusBadge>
               {canManage && (
                 <div className="modal-foot-actions">
+                  <button className="button button-secondary" onClick={onGenerateDoc}>
+                    <Download size={14} />
+                    Generate document
+                  </button>
                   <button className="button button-secondary" onClick={onEdit}>
                     <Pencil size={14} />
                     Edit contract

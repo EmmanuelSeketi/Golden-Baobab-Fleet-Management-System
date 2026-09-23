@@ -136,9 +136,31 @@ nav { flex: 1; }.nav-group { margin-bottom: 21px; }.nav-group > small { display:
 .field-error { color: #a7433d; font-size: 10.5px; font-weight: 600; }
 .checkbox-field { flex-direction: row; align-items: center; gap: 9px; }
 .checkbox-field input { width: auto; }
-.form-error { grid-column: 1 / -1; display: flex; align-items: center; gap: 8px; background: #f8e3e1; color: #9a3c37; border: 1px solid #eccbc8; border-radius: 6px; padding: 9px 11px; font-size: 11.5px; font-weight: 600; }
+  .form-error { grid-column: 1 / -1; display: flex; align-items: center; gap: 8px; background: #f8e3e1; color: #9a3c37; border: 1px solid #eccbc8; border-radius: 6px; padding: 9px 11px; font-size: 11.5px; font-weight: 600; }
+  .form-success { grid-column: 1 / -1; display: flex; align-items: center; gap: 8px; background: #e3f5e8; color: #1f7a3d; border: 1px solid #bfe6cb; border-radius: 6px; padding: 9px 11px; font-size: 11.5px; font-weight: 600; }
 .modal-footer .footer-actions { display: flex; gap: 10px; margin-left: auto; }
 .button[disabled] { opacity: .6; cursor: not-allowed; }
+.machine-location-map { display: block; width: 100%; min-height: 190px; border: 1px solid var(--border); border-radius: 6px; background: #eef2ef; }
+.daily-hours-entry { margin-bottom: 14px; }
+.lifecycle-selector { margin-bottom: 14px; }
+.lifecycle-timeline { padding: 16px; }
+.lifecycle-event { display: flex; gap: 12px; align-items: flex-start; padding: 12px 0; border-bottom: 1px solid var(--border); }
+.lifecycle-event:last-child { border-bottom: 0; }
+.lifecycle-event > div:nth-child(2) { flex: 1; display: flex; flex-direction: column; gap: 3px; }
+.lifecycle-event span { color: #71808a; font-size: 11px; }
+.lifecycle-event p { margin: 3px 0 0; color: #536166; font-size: 11px; }
+.lifecycle-dot { width: 9px; height: 9px; border-radius: 50%; margin-top: 4px; background: #7c8b91; }
+.lifecycle-dot.entry { background: #1677c8; }
+.lifecycle-dot.checkpoint { background: #c88618; }
+.lifecycle-dot.exit { background: #087a3c; }
+.daily-hours-entry .panel-heading { display: flex; justify-content: space-between; align-items: flex-start; padding: 14px 16px; border-bottom: 1px solid var(--border); }
+.daily-hours-entry .panel-heading h3 { margin: 0 0 4px; font-size: 13px; }
+.daily-hours-entry .panel-heading p { margin: 0; color: #7b878c; font-size: 11px; }
+.hours-inline-input { width: 82px; border: 1px solid var(--border); border-radius: 5px; padding: 7px; font: inherit; font-size: 11px; background: #fff; color: var(--foreground); }
+.hours-inline-input.remarks { width: 120px; }
+.button-small { padding: 6px 8px; font-size: 10px; }
+
+
 
 /* ---- Panels ---- */
 .panel-pad { padding: 16px 19px 20px; }
@@ -478,3 +500,184 @@ nav { flex: 1; }.nav-group { margin-bottom: 21px; }.nav-group > small { display:
 .group-header-row td { background: #f4f7f5; border-top: 1px solid var(--border); padding: 9px 14px; }
 .group-header-row .group-name { font-weight: 800; color: #202b31; font-size: 12px; letter-spacing: -.2px; }
 .group-header-row .group-meta { margin-left: 12px; color: #71808a; font-size: 11px; font-weight: 600; }
+
+.lifecycle-flow-note {
+  margin: -0.5rem 0 1.5rem;
+  max-width: 60ch;
+  color: var(--muted-foreground);
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.lifecycle-template-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 1.25rem;
+}
+
+.lifecycle-template-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  padding: 1.4rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--card);
+}
+
+.lifecycle-template-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.lifecycle-template-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  color: #fff;
+}
+
+.lifecycle-template-icon-blue { background: #2563eb; }
+.lifecycle-template-icon-amber { background: #d97706; }
+.lifecycle-template-icon-green { background: #16a34a; }
+
+.lifecycle-template-step {
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted-foreground);
+}
+
+.lifecycle-template-title {
+  margin: 0.2rem 0 0;
+  font-size: 1.02rem;
+  font-weight: 600;
+}
+
+.lifecycle-template-chinese {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--muted-foreground);
+}
+
+.lifecycle-template-desc {
+  margin: 0;
+  flex: 1;
+  font-size: 0.85rem;
+  line-height: 1.5;
+  color: var(--muted-foreground);
+}
+
+.lifecycle-template-button {
+  margin-top: 0.4rem;
+  width: 100%;
+  justify-content: center;
+}
+
+.field-full { grid-column: 1 / -1; }
+
+/* ---- Labeled fields used by the contract document modal ---- */
+.field { display: flex; flex-direction: column; gap: 7px; min-width: 0; }
+.field > span { font-size: 11.5px; font-weight: 700; color: #46545a; letter-spacing: 0.01em; }
+.field input,
+.field select,
+.field textarea {
+  border: 1px solid #c4ccce;
+  border-radius: 8px;
+  padding: 11px 12px;
+  font-size: 13px;
+  line-height: 1.3;
+  color: var(--foreground);
+  background: #fff;
+  width: 100%;
+  font-family: inherit;
+  transition: border-color .15s ease, box-shadow .15s ease;
+}
+.field input::placeholder,
+.field textarea::placeholder { color: #9aa6ab; }
+.field input:hover,
+.field select:hover,
+.field textarea:hover { border-color: #a9b4b6; }
+.field input:focus,
+.field select:focus,
+.field textarea:focus {
+  outline: 0;
+  border-color: #009943;
+  box-shadow: 0 0 0 3px #00994322;
+}
+.field textarea { min-height: 66px; resize: vertical; }
+
+.form-hint {
+  margin: 0 0 0.6rem;
+  font-size: 0.8rem;
+  color: var(--muted-foreground);
+}
+
+.doc-line-card {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--muted);
+  padding: 14px;
+  margin-bottom: 12px;
+}
+
+.doc-line-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.doc-line-badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted-foreground);
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 3px 10px;
+}
+
+.doc-line-remove {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 28px;
+  padding: 0 10px;
+  font-size: 0.78rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--card);
+  color: var(--muted-foreground);
+  cursor: pointer;
+}
+
+.doc-line-remove:hover {
+  color: var(--destructive);
+  border-color: var(--destructive);
+}
+
+/* Daily-hours entry table: keep the Save/Edit action column visible without
+   horizontal scrolling by pinning the last column to the right edge. */
+.hours-entry-table th:last-child,
+.hours-entry-table td:last-child {
+  position: sticky;
+  right: 0;
+  z-index: 1;
+  box-shadow: -8px 0 8px -8px rgba(0, 0, 0, 0.18);
+}
+.hours-entry-table td:last-child {
+  background: var(--card);
+}
+.hours-entry-table th:last-child {
+  background: #fafbfb;
+}
