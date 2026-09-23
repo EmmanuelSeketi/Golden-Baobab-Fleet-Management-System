@@ -63,6 +63,47 @@ create policy equipment_lifecycle_update
   using (auth_role() in ('administrator', 'operations_manager'))
   with check (auth_role() in ('administrator', 'operations_manager'));
 
+-- Operations managers do not receive SELECT access to contract_machine. The
+-- application supplies a machine visible in Fleet Register and calls this
+-- resolver to obtain the active coverage id without exposing commercial rows.
+create or replace function resolve_active_contract_machine(
+  p_machine_id uuid,
+  p_event_date date default current_date
+)
+returns uuid
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  resolved_id uuid;
+  match_count integer;
+begin
+  if auth_role() not in ('administrator', 'operations_manager') then
+    raise exception 'Not authorized to resolve contract coverage';
+  end if;
+
+  select count(*), min(cm.id)
+    into match_count, resolved_id
+  from contract_machine cm
+  where cm.machine_id = p_machine_id
+    and (cm.deployment_start is null or cm.deployment_start <= p_event_date)
+    and (cm.deployment_end is null or cm.deployment_end >= p_event_date);
+
+  if match_count = 0 then
+    raise exception 'No active contract coverage exists for this machine on %', p_event_date;
+  end if;
+  if match_count > 1 then
+    raise exception 'Multiple active contract coverages exist for this machine on %', p_event_date;
+  end if;
+
+  return resolved_id;
+end;
+$$;
+
+revoke all on function resolve_active_contract_machine(uuid, date) from public;
+grant execute on function resolve_active_contract_machine(uuid, date) to authenticated;
+
 -- There is intentionally no DELETE policy. Lifecycle records are an audit
 -- trail and must be corrected with a new record, not permanently deleted.
 
@@ -103,6 +144,9 @@ begin
   end if;
   if new.event_type = 'exit' and entry_date is not null and new.event_date < entry_date then
     raise exception 'Exit date must be on or after the entry date';
+  end if;
+  if new.event_type = 'checkpoint' and exit_date is not null and new.event_date > exit_date then
+    raise exception 'Checkpoint date must be on or before the exit date';
   end if;
   if new.event_type = 'entry' and exit_date is not null and new.event_date > exit_date then
     raise exception 'Entry date must be on or before the exit date';
