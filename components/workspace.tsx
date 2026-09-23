@@ -275,7 +275,7 @@ function ActiveView({
     case 'Overview':
       return <OverviewView role={role} fullName={fullName} />
     case 'Daily Hours':
-      return <DailyHoursView />
+      return <DailyHoursView role={role} userId={userId} />
     case 'Fleet':
       return <FleetView role={role} userId={userId} />
     case 'Operators':

@@ -7,6 +7,8 @@ import { useQuery } from '@/lib/gbi/use-query'
 import { friendlyError, hours as fmtHours, meter, shortDate } from '@/lib/gbi/format'
 import { buildMatrix, exportCsvSections, exportXlsxSheets, type ExportColumn } from '@/lib/gbi/export'
 import { DetailGrid, Modal, PageHeading, StatusBadge, ViewState } from '@/components/shared'
+import { DailyHoursEntry } from '@/components/views/daily-hours-entry'
+import type { UserRole } from '@/lib/gbi/roles'
 
 type Entry = {
   id: string
@@ -66,7 +68,7 @@ function groupBySite(list: Entry[]): { name: string; rows: Entry[] }[] {
     .sort((a, b) => a.name.localeCompare(b.name))
 }
 
-export function DailyHoursView() {
+export function DailyHoursView({ role, userId }: { role: UserRole; userId: string }) {
   const supabase = useSupabase()
   const today = isoDate(new Date())
   const [selectedDate, setSelectedDate] = useState<string>(today)
@@ -166,6 +168,8 @@ export function DailyHoursView() {
       />
 
       <ExportBar />
+
+      <DailyHoursEntry role={role} userId={userId} date={selectedDate} onSaved={entries.reload} />
 
       <div className="hours-toolbar">
         <label

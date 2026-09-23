@@ -393,6 +393,20 @@ function MachineModal({
             ]}
           />
 
+          <ModalSection title="Current site location">
+            {machine.project?.site_location ? (
+              <iframe
+                className="machine-location-map"
+                title={`Map showing ${machine.project.site_location}`}
+                src={`https://www.google.com/maps?q=${encodeURIComponent(`${machine.project.site_location}, Zambia`)}&output=embed`}
+                loading="lazy"
+                referrerPolicy="no-referrer-when-downgrade"
+              />
+            ) : (
+              <p className="muted-cell">No location data available</p>
+            )}
+          </ModalSection>
+
           <ModalSection title="Assignment history" count={assignments.data?.length}>
             <MiniState
               status={assignments.status}

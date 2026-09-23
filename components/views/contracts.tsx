@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { AlertTriangle, Building2, Eye, Pencil, Plus, ScrollText } from 'lucide-react'
+import { AlertTriangle, Building2, Download, Eye, Pencil, Plus, ScrollText } from 'lucide-react'
 import { useSupabase } from '@/lib/supabase/use-supabase'
 import { useQuery } from '@/lib/gbi/use-query'
 import { contractStatusTone, invoiceStatusTone, money, shortDate, titleCase } from '@/lib/gbi/format'
@@ -22,6 +22,8 @@ const CONTRACT_STATUSES = ['draft', 'active', 'expired', 'terminated']
 const BILLING_FREQUENCIES = ['weekly', 'monthly', 'quarterly', 'annually']
 const BILLING_MODELS = ['hourly', 'daily', 'weekly', 'monthly', 'fixed']
 const CURRENCIES = ['ZMW', 'USD', 'ZAR', 'EUR']
+// Replace with the exact path after the DOCX is uploaded to the private bucket.
+const CONTRACT_TEMPLATE_PATH = '[FILL IN EXACT FILENAME AFTER UPLOADING]'
 
 type Contract = {
   id: string
@@ -67,6 +69,23 @@ export function ContractsView({ role, userId }: { role: UserRole; userId: string
   const [tab, setTab] = useState<'contracts' | 'customers'>('contracts')
   const [query, setQuery] = useState('')
   const canManage = canManageCommercial(role)
+  const [templateMessage, setTemplateMessage] = useState('')
+
+  async function downloadContractTemplate() {
+    if (CONTRACT_TEMPLATE_PATH.startsWith('[')) {
+      setTemplateMessage('Set CONTRACT_TEMPLATE_PATH to the exact uploaded DOCX filename first.')
+      return
+    }
+    const { data, error } = await supabase.storage.from('documents').createSignedUrl(CONTRACT_TEMPLATE_PATH, 60)
+    if (error || !data?.signedUrl) {
+      setTemplateMessage(error?.message ?? 'Unable to create a download link.')
+      return
+    }
+    const anchor = document.createElement('a')
+    anchor.href = data.signedUrl
+    anchor.download = CONTRACT_TEMPLATE_PATH.split('/').pop() ?? 'GBI-contract-template.docx'
+    anchor.click()
+  }
 
   // Contract state
   const [selected, setSelected] = useState<Contract | null>(null)
@@ -126,21 +145,29 @@ export function ContractsView({ role, userId }: { role: UserRole; userId: string
         title="Customers & Contracts"
         description="Signed agreements, the machines they cover and the effective billing rules per contract."
         action={
-          canManage ? (
-            <button
-              className="button button-primary"
-              onClick={() =>
-                tab === 'contracts'
-                  ? setContractForm({ mode: 'add', row: null })
-                  : setCustomerForm({ mode: 'add', row: null })
-              }
-            >
-              <Plus size={15} />
-              {tab === 'contracts' ? 'New contract' : 'New customer'}
-            </button>
-          ) : undefined
+          <div className="heading-actions">
+            {role === 'administrator' && (
+              <button className="button button-secondary" onClick={downloadContractTemplate}>
+                <Download size={14} /> Download template
+              </button>
+            )}
+            {canManage && (
+              <button
+                className="button button-primary"
+                onClick={() =>
+                  tab === 'contracts'
+                    ? setContractForm({ mode: 'add', row: null })
+                    : setCustomerForm({ mode: 'add', row: null })
+                }
+              >
+                <Plus size={15} />
+                {tab === 'contracts' ? 'New contract' : 'New customer'}
+              </button>
+            )}
+          </div>
         }
       />
+      {templateMessage && <p className="form-error">{templateMessage}</p>}
 
       <div className="filter-row">
         <div className="seg-tabs">
