@@ -32,18 +32,34 @@ export function EquipmentLifecycleView({ role: _role, userId: _userId }: { role:
   async function download(file: string) {
     setError('')
     setBusy(file)
-    const { data, error } = await supabase.storage.from(BUCKET).createSignedUrl(file, 60, { download: true })
-    setBusy('')
-    if (error || !data?.signedUrl) {
-      setError(`Could not fetch ${file}: ${error?.message ?? 'file not found in the Documents bucket.'}`)
-      return
+    try {
+      const { data, error: dlError } = await supabase.storage.from(BUCKET).download(file)
+      if (dlError || !data) {
+        // Fall back to the public URL for a public bucket.
+        const { data: pub } = supabase.storage.from(BUCKET).getPublicUrl(file)
+        if (!pub?.publicUrl) throw new Error(dlError?.message ?? 'file not found in the Documents bucket.')
+        const res = await fetch(pub.publicUrl)
+        if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
+        triggerDownload(await res.blob(), file)
+        return
+      }
+      triggerDownload(data, file)
+    } catch (err) {
+      setError(`Could not fetch ${file}: ${err instanceof Error ? err.message : 'unknown error.'}`)
+    } finally {
+      setBusy('')
     }
+  }
+
+  function triggerDownload(blob: Blob, file: string) {
+    const url = URL.createObjectURL(blob)
     const link = document.createElement('a')
-    link.href = data.signedUrl
+    link.href = url
     link.download = file
     document.body.appendChild(link)
     link.click()
     link.remove()
+    URL.revokeObjectURL(url)
   }
 
   return (
