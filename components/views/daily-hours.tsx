@@ -20,14 +20,14 @@ type Entry = {
   is_billed: boolean
   remarks: string | null
   site_location: string | null
-  machine: { machine_number: string; machine_type: string } | null
+  machine: { machine_number: string; machine_type: string; chassis_number: string | null } | null
   operator: { full_name: string } | null
   project: { name: string } | null
   customer: { company_name: string } | null
 }
 
 const SELECT =
-  'id,entry_date,hour_meter_start,hour_meter_end,total_hours,flagged_for_review,is_billed,remarks,site_location,machine:machine_id(machine_number,machine_type),operator:operator_id(full_name),project:project_id(name),customer:customer_id(company_name)'
+  'id,entry_date,hour_meter_start,hour_meter_end,total_hours,flagged_for_review,is_billed,remarks,site_location,machine:machine_id(machine_number,machine_type,chassis_number),operator:operator_id(full_name),project:project_id(name),customer:customer_id(company_name)'
 
 // Local calendar date as YYYY-MM-DD (avoids UTC shifting the day near midnight).
 function isoDate(d: Date): string {
@@ -137,6 +137,7 @@ export function DailyHoursView({ role, userId }: { role: UserRole; userId: strin
           <b>{r.machine?.machine_number ?? '—'}</b>
           <div className="muted-cell">{r.machine?.machine_type ?? ''}</div>
         </td>
+        <td>{r.machine?.chassis_number ?? '—'}</td>
         <td>{r.operator?.full_name ?? '—'}</td>
         {!grouped && <td>{r.project?.name ?? '—'}</td>}
         <td>{meter(r.hour_meter_start)}</td>
@@ -270,6 +271,7 @@ export function DailyHoursView({ role, userId }: { role: UserRole; userId: strin
               <thead>
                 <tr>
                   <th>Machine</th>
+                  <th>Chassis No</th>
                   <th>Operator</th>
                   {!grouped && <th>Project</th>}
                   <th>Meter start</th>
@@ -283,7 +285,7 @@ export function DailyHoursView({ role, userId }: { role: UserRole; userId: strin
                   ? groups.map((g) => (
                       <Fragment key={g.name}>
                         <tr className="group-header-row">
-                          <td colSpan={6}>
+                          <td colSpan={7}>
                             <span className="group-name">{g.name}</span>
                             <span className="group-meta">
                               {g.list.length} {g.list.length === 1 ? 'machine' : 'machines'} · {fmtHours(g.totalHours)}
