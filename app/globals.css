@@ -141,6 +141,17 @@ nav { flex: 1; }.nav-group { margin-bottom: 21px; }.nav-group > small { display:
 .button[disabled] { opacity: .6; cursor: not-allowed; }
 .machine-location-map { display: block; width: 100%; min-height: 190px; border: 1px solid var(--border); border-radius: 6px; background: #eef2ef; }
 .daily-hours-entry { margin-bottom: 14px; }
+.lifecycle-selector { margin-bottom: 14px; }
+.lifecycle-timeline { padding: 16px; }
+.lifecycle-event { display: flex; gap: 12px; align-items: flex-start; padding: 12px 0; border-bottom: 1px solid var(--border); }
+.lifecycle-event:last-child { border-bottom: 0; }
+.lifecycle-event > div:nth-child(2) { flex: 1; display: flex; flex-direction: column; gap: 3px; }
+.lifecycle-event span { color: #71808a; font-size: 11px; }
+.lifecycle-event p { margin: 3px 0 0; color: #536166; font-size: 11px; }
+.lifecycle-dot { width: 9px; height: 9px; border-radius: 50%; margin-top: 4px; background: #7c8b91; }
+.lifecycle-dot.entry { background: #1677c8; }
+.lifecycle-dot.checkpoint { background: #c88618; }
+.lifecycle-dot.exit { background: #087a3c; }
 .daily-hours-entry .panel-heading { display: flex; justify-content: space-between; align-items: flex-start; padding: 14px 16px; border-bottom: 1px solid var(--border); }
 .daily-hours-entry .panel-heading h3 { margin: 0 0 4px; font-size: 13px; }
 .daily-hours-entry .panel-heading p { margin: 0; color: #7b878c; font-size: 11px; }

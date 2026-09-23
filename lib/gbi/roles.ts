@@ -21,6 +21,7 @@ export type Module =
   | 'Fleet'
   | 'Operators'
   | 'Projects'
+  | 'Equipment Lifecycle'
   | 'Overtime'
   | 'Machine History'
   | 'Calendar'

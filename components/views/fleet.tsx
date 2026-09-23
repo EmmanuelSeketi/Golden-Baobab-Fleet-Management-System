@@ -290,6 +290,14 @@ type AssignmentRow = {
   operator: { full_name: string } | null
   project: { name: string } | null
 }
+type LifecycleRow = {
+  id: string
+  event_type: 'entry' | 'checkpoint' | 'exit'
+  event_date: string
+  operating_hours: number | null
+  mileage: number | null
+  notes: string | null
+}
 
 function MachineModal({
   machine,
@@ -340,6 +348,16 @@ function MachineModal({
             .eq('machine_id', machine.id)
             .order('start_date', { ascending: false })
             .limit(6) as unknown as PromiseLike<{ data: AssignmentRow[] | null; error: unknown }>),
+    [machine?.id],
+  )
+  const lifecycle = useQuery<LifecycleRow[]>(
+    () =>
+      !machine
+        ? Promise.resolve({ data: [], error: null })
+        : supabase.rpc('resolve_active_contract_machine', { p_machine_id: machine.id, p_event_date: new Date().toISOString().slice(0, 10) }).then(async ({ data, error }) => {
+            if (error || !data) return { data: [], error: error?.message ?? null }
+            return supabase.from('equipment_lifecycle_event_record').select('id,event_type,event_date,operating_hours,mileage,notes').eq('contract_machine_id', data).order('event_date')
+          }),
     [machine?.id],
   )
 
@@ -405,6 +423,16 @@ function MachineModal({
             ) : (
               <p className="muted-cell">No location data available</p>
             )}
+          </ModalSection>
+
+          <ModalSection title="Equipment lifecycle" count={lifecycle.data?.length}>
+            <MiniState status={lifecycle.status} error={lifecycle.error} isEmpty={(lifecycle.data ?? []).length === 0} emptyText="No lifecycle events recorded for the active coverage." />
+            {(lifecycle.data ?? []).map((event) => (
+              <div className="stack-row" key={event.id}>
+                <div><b>{titleCase(event.event_type)}</b><span>{shortDate(event.event_date)} · {event.operating_hours != null ? `${event.operating_hours} h` : ''}{event.mileage != null ? ` · ${event.mileage} km` : ''}</span></div>
+                {event.notes && <span className="stack-meta">{event.notes}</span>}
+              </div>
+            ))}
           </ModalSection>
 
           <ModalSection title="Assignment history" count={assignments.data?.length}>
