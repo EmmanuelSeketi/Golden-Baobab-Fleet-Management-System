@@ -126,11 +126,19 @@ export function DailyHoursEntry({
     const result = old
       ? await supabase.from('daily_hour_entry').update(payload).eq('id', old.id)
       : await supabase.from('daily_hour_entry').insert({ ...payload, created_by: userId })
-    setSaving(null)
     if (result.error) {
+      setSaving(null)
       setMessage({ text: result.error.message, error: true })
       return
     }
+    // Carry the reading forward: the machine's current hour meter becomes today's
+    // end reading, so tomorrow's entry starts where today left off. Only ever
+    // advance the meter — never pull it backwards when correcting an old entry.
+    if (end > (machine.current_hour_meter ?? 0)) {
+      await supabase.from('machine').update({ current_hour_meter: end }).eq('id', machine.id)
+      machines.reload()
+    }
+    setSaving(null)
     setMessage({ text: `${machine.machine_number} saved.`, error: false })
     // Lock the row and clear its local draft so it reflects the saved values.
     setEditing((current) => ({ ...current, [machine.id]: false }))
