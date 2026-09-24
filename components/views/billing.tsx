@@ -736,8 +736,7 @@ function GenerateInvoiceModal({
         .in('machine_id', machineIds)
         .gte('entry_date', start)
         .lte('entry_date', end)
-        .eq('is_billed', false)
-        .eq('flagged_for_review', false),
+        .eq('is_billed', false),
       supabase
         .from('billing_rule')
         .select(

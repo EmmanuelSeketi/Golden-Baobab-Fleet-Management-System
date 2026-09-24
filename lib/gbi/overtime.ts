@@ -34,6 +34,12 @@ export type OvertimeLine = {
 
 const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100
 
+// Sensible fallbacks used when no overtime rule is configured yet, so overtime
+// hours always reflect from daily hours even before an administrator sets up a
+// rule. Pay stays 0 until a rule with a base hourly rate exists.
+export const DEFAULT_STANDARD_HOURS = 8
+export const DEFAULT_WEEKDAY_MULTIPLIER = 1.5
+
 /** Rule in force on a date. operator_category null = applies to all operators. */
 export function pickOvertimeRule(rules: OvertimeRule[], isoDate: string): OvertimeRule | null {
   for (const r of rules) {
@@ -74,6 +80,46 @@ export function computeOvertime(entry: OvertimeSourceEntry, rule: OvertimeRule):
     standard_hours: round2(standardHours),
     overtime_hours: round2(overtimeHours),
     overtime_pay: pay,
+  }
+}
+
+export type DerivedOvertime = {
+  standardHours: number
+  overtimeHours: number
+  overtimePay: number
+  ruleId: string | null
+  ruleName: string | null
+  weekdayMultiplier: number
+  hasRealRule: boolean
+}
+
+/**
+ * Derive an operator's overtime for a single daily entry for DISPLAY purposes.
+ * Unlike computeOvertime, this never requires a configured rule: when none is
+ * in force it falls back to the default standard hours and multiplier so the
+ * overtime page always reflects hours worked beyond standard. Returns null only
+ * when there is no operator or no overtime to show.
+ */
+export function deriveOvertime(entry: OvertimeSourceEntry, rule: OvertimeRule | null): DerivedOvertime | null {
+  if (!entry.operator_id) return null
+  const total = Number(entry.total_hours) || 0
+  const std = rule?.standard_hours_per_day != null ? Number(rule.standard_hours_per_day) : DEFAULT_STANDARD_HOURS
+  const overtimeHours = Math.max(0, total - std)
+  if (overtimeHours <= 0) return null
+
+  const standardHours = Math.min(total, std)
+  const base = rule?.base_hourly_rate != null ? Number(rule.base_hourly_rate) : 0
+  const multiplier = rule ? dayMultiplier(rule, entry.entry_date) : DEFAULT_WEEKDAY_MULTIPLIER
+  const pay = round2(overtimeHours * base * multiplier)
+
+  return {
+    standardHours: round2(standardHours),
+    overtimeHours: round2(overtimeHours),
+    overtimePay: pay,
+    ruleId: rule?.id ?? null,
+    ruleName: rule?.name ?? null,
+    weekdayMultiplier: multiplier,
+    hasRealRule: !!rule,
   }
 }
 
