@@ -35,10 +35,22 @@ type Entry = {
   operator: { full_name: string } | null
   project: { name: string } | null
   customer: { company_name: string } | null
+  overtime_entry?: { overtime_hours: number | null; overtime_pay: number | null }[] | null
 }
 
 const SELECT =
   'id,entry_date,hour_meter_start,hour_meter_end,total_hours,flagged_for_review,is_billed,remarks,site_location,machine:machine_id(machine_number,machine_type,chassis_number),operator:operator_id(full_name),project:project_id(name),customer:customer_id(company_name)'
+
+// The export additionally pulls any overtime calculated for each entry so the
+// spreadsheet can show overtime hours and the overtime amount per day.
+const EXPORT_SELECT = `${SELECT},overtime_entry(overtime_hours,overtime_pay)`
+
+function overtimeHoursOf(r: Entry): number {
+  return (r.overtime_entry ?? []).reduce((s, o) => s + Number(o.overtime_hours ?? 0), 0)
+}
+function overtimePayOf(r: Entry): number {
+  return (r.overtime_entry ?? []).reduce((s, o) => s + Number(o.overtime_pay ?? 0), 0)
+}
 
 // Local calendar date as YYYY-MM-DD (avoids UTC shifting the day near midnight).
 function isoDate(d: Date): string {
@@ -60,6 +72,8 @@ const EXPORT_COLUMNS: ExportColumn<Entry>[] = [
   { header: 'Hour meter start', value: (r) => r.hour_meter_start },
   { header: 'Hour meter end', value: (r) => r.hour_meter_end },
   { header: 'Total hours', value: (r) => r.total_hours ?? '' },
+  { header: 'Overtime hours', value: (r) => overtimeHoursOf(r) || '' },
+  { header: 'Overtime amount', value: (r) => overtimePayOf(r) || '' },
   { header: 'Site location', value: (r) => r.site_location ?? '' },
   { header: 'Remarks', value: (r) => r.remarks ?? '' },
 ]
@@ -420,7 +434,7 @@ function ExportBar() {
     setMessage(null)
     const { data, error } = await supabase
       .from('daily_hour_entry')
-      .select(SELECT)
+      .select(EXPORT_SELECT)
       .gte('entry_date', from)
       .lte('entry_date', to)
       .order('entry_date')

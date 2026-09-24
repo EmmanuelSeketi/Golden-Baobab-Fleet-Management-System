@@ -1,10 +1,11 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
-import { AlertTriangle, CheckCircle2, Settings2, Sparkles } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { AlertTriangle, CalendarDays, CheckCircle2, Download, FileSpreadsheet, Settings2, Sparkles } from 'lucide-react'
 import { useSupabase } from '@/lib/supabase/use-supabase'
 import { useQuery } from '@/lib/gbi/use-query'
 import { dateTime, money, shortDate, titleCase } from '@/lib/gbi/format'
+import { buildMatrix, exportCsv, exportXlsx, type ExportColumn } from '@/lib/gbi/export'
 import {
   canGenerateOvertime,
   canManageOvertimeRules,
@@ -39,9 +40,33 @@ const FILTERS = ['all', 'pending', 'reviewed'] as const
 const LIST_SELECT =
   'id,standard_hours,overtime_hours,overtime_pay,reviewed,reviewed_at,created_at,operator:operator_id(full_name),rule:overtime_rule_id(name,weekday_rate_multiplier),entry:daily_hour_entry_id(entry_date,machine:machine_id(machine_number))'
 
+// Local calendar date as YYYY-MM-DD (avoids UTC shifting the day near midnight).
+function isoDate(d: Date): string {
+  const local = new Date(d.getTime() - d.getTimezoneOffset() * 60000)
+  return local.toISOString().slice(0, 10)
+}
+function daysAgo(n: number): string {
+  const d = new Date()
+  d.setDate(d.getDate() - n)
+  return isoDate(d)
+}
+
+const EXPORT_COLUMNS: ExportColumn<Overtime>[] = [
+  { header: 'Entry date', value: (r) => r.entry?.entry_date ?? '' },
+  { header: 'Operator', value: (r) => r.operator?.full_name ?? '' },
+  { header: 'Machine', value: (r) => r.entry?.machine?.machine_number ?? '' },
+  { header: 'Overtime rule', value: (r) => r.rule?.name ?? '' },
+  { header: 'Standard hours', value: (r) => Number(r.standard_hours ?? 0) },
+  { header: 'Overtime hours', value: (r) => Number(r.overtime_hours ?? 0) },
+  { header: 'Overtime pay', value: (r) => Number(r.overtime_pay ?? 0) },
+  { header: 'Status', value: (r) => (r.reviewed ? 'Reviewed' : 'Pending') },
+]
+
 export function OvertimeView({ role, userId }: { role: UserRole; userId: string }) {
   const supabase = useSupabase()
   const [filter, setFilter] = useState<(typeof FILTERS)[number]>('all')
+  const [from, setFrom] = useState<string>(daysAgo(30))
+  const [to, setTo] = useState<string>(isoDate(new Date()))
   const [selected, setSelected] = useState<Overtime | null>(null)
   const [generating, setGenerating] = useState(false)
   const [managingRules, setManagingRules] = useState(false)
@@ -63,10 +88,19 @@ export function OvertimeView({ role, userId }: { role: UserRole; userId: string 
   )
 
   const rows = useMemo(() => {
-    const all = records.data ?? []
+    let all = records.data ?? []
+    // Filter by the daily entry's date (from–to), keeping rows with no linked
+    // entry date only when no range excludes them.
+    all = all.filter((r) => {
+      const d = r.entry?.entry_date
+      if (!d) return true
+      if (from && d < from) return false
+      if (to && d > to) return false
+      return true
+    })
     if (filter === 'all') return all
     return all.filter((r) => (filter === 'reviewed' ? r.reviewed : !r.reviewed))
-  }, [records.data, filter])
+  }, [records.data, filter, from, to])
 
   const totalPay = rows.reduce((s, r) => s + Number(r.overtime_pay ?? 0), 0)
   const totalHours = rows.reduce((s, r) => s + Number(r.overtime_hours ?? 0), 0)
@@ -96,6 +130,8 @@ export function OvertimeView({ role, userId }: { role: UserRole; userId: string 
           ) : undefined
         }
       />
+
+      <OvertimeExportBar from={from} to={to} setFrom={setFrom} setTo={setTo} rows={rows} ready={records.status === 'ready'} />
 
       <div className="hours-summary">
         <div>
@@ -723,6 +759,113 @@ function OtField({
       </label>
       <input type={type} value={value} placeholder={placeholder} onChange={(e) => onChange(e.target.value)} />
       {error && <span className="field-error">{error}</span>}
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// From–to range filter + CSV/Excel export for the visible overtime entries
+// ---------------------------------------------------------------------------
+
+function OvertimeExportBar({
+  from,
+  to,
+  setFrom,
+  setTo,
+  rows,
+  ready,
+}: {
+  from: string
+  to: string
+  setFrom: (v: string) => void
+  setTo: (v: string) => void
+  rows: Overtime[]
+  ready: boolean
+}) {
+  const [busy, setBusy] = useState<null | 'csv' | 'xlsx'>(null)
+  const [message, setMessage] = useState<{ text: string; error: boolean } | null>(null)
+  const fromRef = useRef<HTMLInputElement>(null)
+  const toRef = useRef<HTMLInputElement>(null)
+
+  function openPicker(ref: React.RefObject<HTMLInputElement | null>) {
+    try {
+      ref.current?.showPicker?.()
+    } catch {
+      /* showPicker unsupported/blocked — focusing the input still works */
+    }
+  }
+
+  async function runExport(kind: 'csv' | 'xlsx') {
+    if (from && to && from > to) {
+      setMessage({ text: 'The "from" date must be on or before the "to" date.', error: true })
+      return
+    }
+    if (rows.length === 0) {
+      setMessage({ text: 'No overtime entries in this range to export.', error: true })
+      return
+    }
+    setBusy(kind)
+    setMessage(null)
+    const { headers, rows: matrix } = buildMatrix(rows, EXPORT_COLUMNS)
+    const base = `operator-overtime_${from || 'start'}_to_${to || 'end'}`
+    try {
+      if (kind === 'csv') exportCsv(`${base}.csv`, headers, matrix)
+      else await exportXlsx(`${base}.xlsx`, headers, matrix, 'Overtime')
+      setMessage({
+        text: `Exported ${rows.length} ${rows.length === 1 ? 'entry' : 'entries'} (${kind.toUpperCase()}).`,
+        error: false,
+      })
+    } catch {
+      setMessage({ text: 'Could not generate the file. Please try again.', error: true })
+    }
+    setBusy(null)
+  }
+
+  return (
+    <div className="export-bar">
+      <div className="export-title">
+        <b>Export overtime</b>
+        <span>Filter by date range — the table and totals update to match.</span>
+      </div>
+      <div className="range-field">
+        <span className="range-label">From</span>
+        <label className="date-control" onClick={() => openPicker(fromRef)}>
+          <CalendarDays size={15} />
+          <input
+            ref={fromRef}
+            type="date"
+            value={from}
+            max={to || undefined}
+            onChange={(e) => setFrom(e.target.value)}
+            aria-label="Overtime from date"
+          />
+        </label>
+      </div>
+      <div className="range-field">
+        <span className="range-label">To</span>
+        <label className="date-control" onClick={() => openPicker(toRef)}>
+          <CalendarDays size={15} />
+          <input
+            ref={toRef}
+            type="date"
+            value={to}
+            min={from || undefined}
+            onChange={(e) => setTo(e.target.value)}
+            aria-label="Overtime to date"
+          />
+        </label>
+      </div>
+      <div className="export-actions">
+        <button className="button button-secondary" onClick={() => runExport('csv')} disabled={busy !== null || !ready}>
+          <Download size={14} />
+          {busy === 'csv' ? 'Exporting…' : 'CSV'}
+        </button>
+        <button className="button button-primary" onClick={() => runExport('xlsx')} disabled={busy !== null || !ready}>
+          <FileSpreadsheet size={14} />
+          {busy === 'xlsx' ? 'Exporting…' : 'Excel'}
+        </button>
+      </div>
+      {message && <p className={`export-msg ${message.error ? 'error' : ''}`}>{message.text}</p>}
     </div>
   )
 }

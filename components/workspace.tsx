@@ -300,9 +300,9 @@ function ActiveView({
     case 'Reports':
       return <ReportsView role={role} />
     case 'Maintenance':
-      return <MaintenanceView />
+      return <MaintenanceView role={role} userId={userId} />
     case 'Repairs':
-      return <RepairsView />
+      return <RepairsView role={role} userId={userId} />
     case 'Notifications':
       return <NotificationsView />
     case 'Audit Log':
