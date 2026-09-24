@@ -82,6 +82,47 @@ export function OvertimeView({ role, userId }: { role: UserRole; userId: string 
     [],
   )
 
+  // Auto-derive overtime from daily hours so entries reflect without a manual
+  // "Generate" step. Runs once per mount for users allowed to generate; other
+  // roles simply read whatever has already been derived. Any daily entry with
+  // an operator that exceeds the effective rule's standard hours and has no
+  // overtime row yet gets one created here.
+  const [syncing, setSyncing] = useState(false)
+  const syncedRef = useRef(false)
+  useEffect(() => {
+    if (!canGenerate || syncedRef.current) return
+    syncedRef.current = true
+    let cancelled = false
+    ;(async () => {
+      setSyncing(true)
+      const [{ data: entries }, { data: rules }, { data: existing }] = await Promise.all([
+        supabase
+          .from('daily_hour_entry')
+          .select('id,entry_date,operator_id,total_hours')
+          .not('operator_id', 'is', null),
+        supabase.from('overtime_rule').select(RULE_SELECT).order('effective_from', { ascending: false }),
+        supabase.from('overtime_entry').select('daily_hour_entry_id'),
+      ])
+      if (cancelled) return
+      const done = new Set(
+        (existing ?? []).map((e) => (e as { daily_hour_entry_id: string }).daily_hour_entry_id),
+      )
+      const fresh = ((entries ?? []) as OvertimeSourceEntry[]).filter((e) => !done.has(e.id))
+      const preview = buildOvertimePreview(fresh, (rules ?? []) as OvertimeRule[])
+      if (preview.lines.length > 0) {
+        // Ignore insert errors (e.g. a concurrent sync inserting the same rows);
+        // the list reload below reflects whatever landed.
+        await supabase.from('overtime_entry').insert(preview.lines)
+        if (!cancelled) records.reload()
+      }
+      if (!cancelled) setSyncing(false)
+    })()
+    return () => {
+      cancelled = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [canGenerate, supabase])
+
   const rows = useMemo(() => {
     let all = records.data ?? []
     // Single-day filter on the linked daily entry's date; empty = All days.
@@ -162,7 +203,15 @@ export function OvertimeView({ role, userId }: { role: UserRole; userId: string 
           error={records.error}
           isEmpty={rows.length === 0}
           title="overtime"
-          emptyText={filter === 'all' ? 'No overtime recorded yet.' : `No ${filter} overtime entries.`}
+          emptyText={
+            syncing
+              ? 'Deriving overtime from daily hours…'
+              : filter === 'all'
+                ? date
+                  ? 'No overtime on this day. Pick another date or choose "All days".'
+                  : 'No overtime recorded yet.'
+                : `No ${filter} overtime entries.`
+          }
           onRetry={records.reload}
         >
           <div className="table-scroll">
@@ -384,8 +433,7 @@ function GenerateOvertimeModal({
           .select('id,entry_date,operator_id,total_hours')
           .gte('entry_date', start)
           .lte('entry_date', end)
-          .not('operator_id', 'is', null)
-          .eq('flagged_for_review', false),
+          .not('operator_id', 'is', null),
         supabase.from('overtime_rule').select(RULE_SELECT).order('effective_from', { ascending: false }),
         supabase
           .from('overtime_entry')
