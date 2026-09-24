@@ -37,7 +37,6 @@ type HourRow = {
   total_hours: number
   hour_meter_start: number
   hour_meter_end: number
-  flagged_for_review: boolean
   operator: { full_name: string } | null
   project: { name: string } | null
 }
@@ -122,7 +121,7 @@ export function MachineHistoryView() {
         : (supabase
             .from('daily_hour_entry')
             .select(
-              'id,entry_date,total_hours,hour_meter_start,hour_meter_end,flagged_for_review,operator:operator_id(full_name),project:project_id(name)',
+              'id,entry_date,total_hours,hour_meter_start,hour_meter_end,operator:operator_id(full_name),project:project_id(name)',
             )
             .eq('machine_id', machineId)
             .order('entry_date', { ascending: false }) as unknown as PromiseLike<{
@@ -191,7 +190,6 @@ export function MachineHistoryView() {
         title: `${fmtHours(h.total_hours)} logged`,
         detail: `Meter ${meter(h.hour_meter_start)} → ${meter(h.hour_meter_end)}`,
         meta: [h.operator?.full_name, h.project?.name].filter(Boolean).join(' · ') || 'No operator / project',
-        status: h.flagged_for_review ? { label: 'Flagged', tone: 'amber' } : undefined,
         value: fmtHours(h.total_hours),
       })
     }

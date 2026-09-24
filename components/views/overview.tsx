@@ -28,7 +28,6 @@ type RecentRow = {
   id: string
   entry_date: string
   total_hours: number | null
-  flagged_for_review: boolean
   machine: { machine_number: string } | null
   operator: { full_name: string } | null
 }
@@ -101,7 +100,7 @@ export function OverviewView({ role, fullName }: { role: UserRole; fullName: str
     () =>
       supabase
         .from('daily_hour_entry')
-        .select('id,entry_date,total_hours,flagged_for_review,machine:machine_id(machine_number),operator:operator_id(full_name)')
+        .select('id,entry_date,total_hours,machine:machine_id(machine_number),operator:operator_id(full_name)')
         .order('entry_date', { ascending: false })
         .order('created_at', { ascending: false })
         .limit(6) as unknown as PromiseLike<{ data: RecentRow[] | null; error: unknown }>,
@@ -353,7 +352,6 @@ export function OverviewView({ role, fullName }: { role: UserRole; fullName: str
                       <td>{shortDate(r.entry_date)}</td>
                       <td>
                         <b>{r.machine?.machine_number ?? '—'}</b>
-                        {r.flagged_for_review && <span className="flag-chip">Review</span>}
                       </td>
                       <td>{r.operator?.full_name ?? '—'}</td>
                       <td>{fmtHours(r.total_hours)}</td>
