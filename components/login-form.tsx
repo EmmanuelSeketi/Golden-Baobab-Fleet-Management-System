@@ -72,7 +72,7 @@ export function LoginForm() {
           />
           {error && <div className="login-error">{error}</div>}
           <button className="button button-primary login-button" disabled={loading}>
-            {loading ? 'Signing in…' : 'Sign in securely'}
+            {loading ? 'Signing in…' : 'Sign in'}
           </button>
         </form>
       </section>

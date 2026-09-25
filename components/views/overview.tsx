@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { AlertTriangle, CalendarClock, Clock, Truck, Wallet } from 'lucide-react'
 import { useSupabase } from '@/lib/supabase/use-supabase'
 import { useQuery } from '@/lib/gbi/use-query'
 import { canAccess, firstNameOf, type UserRole } from '@/lib/gbi/roles'
@@ -167,21 +166,18 @@ export function OverviewView({ role, fullName }: { role: UserRole; fullName: str
 
       <div className="kpi-grid">
         <KpiCard
-          icon={Truck}
           tone="green"
           label="Active machines"
           value={machines.status === 'ready' ? `${activeMachines}` : '—'}
           sub={machines.status === 'ready' ? `of ${fleetTotal} in fleet` : 'Loading fleet…'}
         />
         <KpiCard
-          icon={Clock}
           tone="blue"
           label="Unbilled hour entries"
           value={unbilled.status === 'ready' ? `${unbilled.data}` : '—'}
           sub="awaiting invoicing"
         />
         <KpiCard
-          icon={AlertTriangle}
           tone="red"
           label="Service due / overdue"
           value={maintenance.status === 'ready' ? `${dueCount}` : '—'}
@@ -189,7 +185,6 @@ export function OverviewView({ role, fullName }: { role: UserRole; fullName: str
         />
         {showCommercial ? (
           <KpiCard
-            icon={Wallet}
             tone="gold"
             label="Outstanding invoices"
             value={outstanding.status === 'ready' ? money(outstanding.data) : '—'}
@@ -197,7 +192,6 @@ export function OverviewView({ role, fullName }: { role: UserRole; fullName: str
           />
         ) : (
           <KpiCard
-            icon={CalendarClock}
             tone="gold"
             label="Fleet size"
             value={machines.status === 'ready' ? `${fleetTotal}` : '—'}

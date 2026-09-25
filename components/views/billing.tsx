@@ -1,17 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import {
-  AlertCircle,
-  AlertTriangle,
-  CheckCircle2,
-  Download,
-  FileText,
-  Printer,
-  ReceiptText,
-  Sparkles,
-  Wallet,
-} from 'lucide-react'
+import { AlertTriangle, CheckCircle2, Download, Printer, Sparkles, Wallet } from 'lucide-react'
 import { useSupabase } from '@/lib/supabase/use-supabase'
 import { useQuery } from '@/lib/gbi/use-query'
 import { invoiceStatusTone, money, shortDate, titleCase } from '@/lib/gbi/format'
@@ -104,28 +94,24 @@ export function BillingView({ role, userId }: { role: UserRole; userId: string }
 
       <div className="kpi-grid">
         <KpiCard
-          icon={ReceiptText}
           tone="gold"
           label="Total invoiced"
           value={ready ? money(totals.invoiced) : '—'}
           sub={`${rows.length} invoices`}
         />
         <KpiCard
-          icon={Wallet}
           tone="blue"
           label="Outstanding"
           value={ready ? money(totals.outstanding) : '—'}
           sub="finalized, approved & overdue"
         />
         <KpiCard
-          icon={AlertCircle}
           tone="green"
           label="Paid"
           value={ready ? money(totals.paid) : '—'}
           sub="settled invoices"
         />
         <KpiCard
-          icon={FileText}
           tone="red"
           label="In draft / approval"
           value={ready ? `${totals.draft}` : '—'}
