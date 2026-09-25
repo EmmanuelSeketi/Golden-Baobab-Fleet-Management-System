@@ -54,6 +54,8 @@ import { RepairsView } from '@/components/views/repairs'
 import { NotificationsView } from '@/components/views/notifications'
 import { AuditView } from '@/components/views/audit'
 import { SettingsView } from '@/components/views/settings'
+import { LangProvider, useLang } from '@/lib/i18n'
+import { Localizer } from '@/components/localizer'
 
 type NavItem = { module: Module; label: string; zh: string; icon: React.ElementType }
 type NavGroup = { group: string; zh: string; items: NavItem[] }
@@ -102,14 +104,21 @@ const NAV: NavGroup[] = [
   },
 ]
 
-type Lang = 'en' | 'zh'
-
 export function Workspace({ profile, email }: { profile: AppUser; email: string }) {
+  return (
+    <LangProvider>
+      <Localizer />
+      <WorkspaceInner profile={profile} email={email} />
+    </LangProvider>
+  )
+}
+
+function WorkspaceInner({ profile, email }: { profile: AppUser; email: string }) {
   const supabase = useSupabase()
   const router = useRouter()
   const [active, setActive] = useState<Module>('Overview')
   const [menuOpen, setMenuOpen] = useState(false)
-  const [lang, setLang] = useState<Lang>('en')
+  const { lang, setLang } = useLang()
   const [signingOut, setSigningOut] = useState(false)
 
   // Filter navigation to what this role may actually read (mirrors RLS).

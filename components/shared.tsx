@@ -55,14 +55,16 @@ export function KpiCard({
   value: string
   sub: string
   trend?: string
-  icon: React.ElementType
+  icon?: React.ElementType
   tone?: string
 }) {
   return (
     <div className="kpi-card">
-      <div className={`kpi-icon ${tone}`}>
-        <Icon size={18} />
-      </div>
+      {Icon ? (
+        <div className={`kpi-icon ${tone}`}>
+          <Icon size={18} />
+        </div>
+      ) : null}
       <div className="kpi-copy">
         <span>{label}</span>
         <strong>{value}</strong>
