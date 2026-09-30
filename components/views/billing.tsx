@@ -1,7 +1,8 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { AlertTriangle, CheckCircle2, Download, Printer, Sparkles, Wallet } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, Download, FileText, Printer, Sparkles, Wallet } from 'lucide-react'
+import { QuotationDocModal, type QuotationDefaults } from '@/components/views/quotation-doc-modal'
 import { useSupabase } from '@/lib/supabase/use-supabase'
 import { useQuery } from '@/lib/gbi/use-query'
 import { invoiceStatusTone, money, shortDate, titleCase } from '@/lib/gbi/format'
@@ -44,7 +45,17 @@ export function BillingView({ role, userId }: { role: UserRole; userId: string }
   const supabase = useSupabase()
   const [selected, setSelected] = useState<Invoice | null>(null)
   const [generating, setGenerating] = useState(false)
+  const [quotation, setQuotation] = useState<QuotationDefaults | null>(null)
   const canManage = canManageCommercial(role)
+
+  const customers = useQuery<{ id: string; company_name: string }[]>(
+    () =>
+      supabase.from('customer').select('id,company_name').order('company_name') as unknown as PromiseLike<{
+        data: { id: string; company_name: string }[] | null
+        error: unknown
+      }>,
+    [],
+  )
 
   const invoices = useQuery<Invoice[]>(
     () =>
@@ -83,12 +94,18 @@ export function BillingView({ role, userId }: { role: UserRole; userId: string }
         title="Billing & Invoices"
         description="Generate invoices from verified working hours, then move them through approval, finalisation and payment."
         action={
-          canManage ? (
-            <button className="button button-primary" onClick={() => setGenerating(true)}>
-              <Sparkles size={15} />
-              Generate invoice
+          <div className="modal-foot-actions">
+            <button className="button button-secondary" onClick={() => setQuotation({})}>
+              <FileText size={15} />
+              Hiring quotation
             </button>
-          ) : undefined
+            {canManage && (
+              <button className="button button-primary" onClick={() => setGenerating(true)}>
+                <Sparkles size={15} />
+                Generate invoice
+              </button>
+            )}
+          </div>
         }
       />
 
@@ -174,6 +191,14 @@ export function BillingView({ role, userId }: { role: UserRole; userId: string }
         onChanged={() => {
           invoices.reload()
         }}
+        onDocument={(d) => setQuotation(d)}
+      />
+
+      <QuotationDocModal
+        open={quotation !== null}
+        customers={customers.data ?? []}
+        defaults={quotation ?? undefined}
+        onClose={() => setQuotation(null)}
       />
 
       {canManage && (
@@ -207,7 +232,7 @@ type LineItem = {
   daily_hour_entry_id: string
   daily_hour_entry: {
     entry_date: string
-    machine: { machine_number: string } | null
+    machine: { machine_number: string; machine_type: string | null } | null
   } | null
 }
 type Adjustment = { id: string; reason: string; amount: number; created_at: string }
@@ -226,12 +251,14 @@ function InvoiceModal({
   userId,
   onClose,
   onChanged,
+  onDocument,
 }: {
   invoice: Invoice | null
   canManage: boolean
   userId: string
   onClose: () => void
   onChanged: () => void
+  onDocument: (defaults: QuotationDefaults) => void
 }) {
   const supabase = useSupabase()
   const currency = invoice?.customer?.currency ?? 'ZMW'
@@ -247,7 +274,7 @@ function InvoiceModal({
         : (supabase
             .from('billing_entry')
             .select(
-              'id,normal_hours,overtime_hours,normal_charge,overtime_charge,additional_charges,total_charge,daily_hour_entry_id,daily_hour_entry:daily_hour_entry_id(entry_date,machine:machine_id(machine_number))',
+              'id,normal_hours,overtime_hours,normal_charge,overtime_charge,additional_charges,total_charge,daily_hour_entry_id,daily_hour_entry:daily_hour_entry_id(entry_date,machine:machine_id(machine_number,machine_type))',
             )
             .eq('invoice_id', invoice.id)
             .order('created_at') as unknown as PromiseLike<{ data: LineItem[] | null; error: unknown }>),
@@ -323,6 +350,31 @@ function InvoiceModal({
     onClose()
   }
 
+  function openDocument() {
+    const byMachine = new Map<string, { model: string; hours: number; total: number }>()
+    for (const li of items.data ?? []) {
+      const key = li.daily_hour_entry?.machine?.machine_number ?? 'Unassigned'
+      const row = byMachine.get(key) ?? { model: li.daily_hour_entry?.machine?.machine_type ?? '', hours: 0, total: 0 }
+      row.hours += Number(li.normal_hours ?? 0) + Number(li.overtime_hours ?? 0)
+      row.total += Number(li.total_charge ?? 0)
+      byMachine.set(key, row)
+    }
+    onDocument({
+      quotationNumber: invoice!.invoice_number,
+      lessee: invoice!.customer?.company_name ?? '',
+      date: new Date().toISOString().slice(0, 10),
+      currency: currency === 'ZMW' ? 'ZMW' : 'USD',
+      items: [...byMachine.entries()].map(([spec, r]) => ({
+        model: titleCase(r.model),
+        specification: spec,
+        rental: '',
+        qty: '1',
+        hours: String(round2(r.hours)),
+        total: String(round2(r.total)),
+      })),
+    })
+  }
+
   function exportCsv() {
     const rows = [
       ['Date', 'Machine', 'Normal hours', 'OT hours', 'Normal charge', 'OT charge', 'Total'],
@@ -358,6 +410,10 @@ function InvoiceModal({
           <div className="modal-foot-split">
             <StatusBadge tone={invoiceStatusTone(invoice.status)}>{titleCase(invoice.status)}</StatusBadge>
             <div className="modal-foot-actions">
+              <button className="button button-secondary" onClick={openDocument} disabled={items.status !== 'ready'}>
+                <FileText size={14} />
+                Document
+              </button>
               <button className="button button-secondary" onClick={exportCsv}>
                 <Download size={14} />
                 CSV
