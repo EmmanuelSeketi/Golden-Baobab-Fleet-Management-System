@@ -19,6 +19,7 @@ type OtRow = {
   persistedId: string | null // overtime_entry id, when the line has been recorded
   operatorId: string | null
   operatorName: string
+  machineId: string
   machineNumber: string
   entryDate: string
   ruleId: string | null
@@ -39,7 +40,7 @@ const RULE_SELECT =
 
 // Source daily entries (the single source of truth for overtime hours).
 const ENTRY_SELECT =
-  'id,entry_date,operator_id,total_hours,operator:operator_id(full_name),machine:machine_id(machine_number)'
+  'id,entry_date,operator_id,total_hours,operator:operator_id(full_name),machine:machine_id(id,machine_number)'
 
 type EntryRow = {
   id: string
@@ -47,7 +48,7 @@ type EntryRow = {
   operator_id: string | null
   total_hours: number
   operator: { full_name: string } | null
-  machine: { machine_number: string } | null
+  machine: { id: string; machine_number: string } | null
 }
 
 type PersistedRow = {
@@ -82,6 +83,8 @@ export function OvertimeView({ role, userId }: { role: UserRole; userId: string 
   const [filter, setFilter] = useState<(typeof FILTERS)[number]>('all')
   // Single-day filter, defaulting to today. Empty string means "All days".
   const [date, setDate] = useState<string>(isoDate(new Date()))
+  const [machineFilter, setMachineFilter] = useState('')
+  const [operatorFilter, setOperatorFilter] = useState('')
   const [selected, setSelected] = useState<OtRow | null>(null)
   const [managingRules, setManagingRules] = useState(false)
 
@@ -148,6 +151,7 @@ export function OvertimeView({ role, userId }: { role: UserRole; userId: string 
         persistedId: p?.id ?? null,
         operatorId: e.operator_id,
         operatorName: e.operator?.full_name ?? 'N/A',
+        machineId: e.machine?.id ?? '',
         machineNumber: e.machine?.machine_number ?? 'N/A',
         entryDate: e.entry_date,
         ruleId: derived.ruleId,
@@ -168,9 +172,22 @@ export function OvertimeView({ role, userId }: { role: UserRole; userId: string 
   const rows = useMemo(() => {
     let all = allRows
     if (date) all = all.filter((r) => r.entryDate === date)
-    if (filter === 'all') return all
-    return all.filter((r) => (filter === 'reviewed' ? r.reviewed : !r.reviewed))
-  }, [allRows, filter, date])
+    if (machineFilter) all = all.filter((r) => r.machineId === machineFilter)
+    if (operatorFilter) all = all.filter((r) => r.operatorId === operatorFilter)
+    if (filter !== 'all') all = all.filter((r) => (filter === 'reviewed' ? r.reviewed : !r.reviewed))
+    return all
+  }, [allRows, filter, date, machineFilter, operatorFilter])
+
+  const machineOptions = useMemo(
+    () => Array.from(new Map(allRows.filter((row) => row.machineId).map((row) => [row.machineId, row.machineNumber])).entries())
+      .sort((a, b) => a[1].localeCompare(b[1])),
+    [allRows],
+  )
+  const operatorOptions = useMemo(
+    () => Array.from(new Map(allRows.filter((row) => row.operatorId).map((row) => [row.operatorId!, row.operatorName])).entries())
+      .sort((a, b) => a[1].localeCompare(b[1])),
+    [allRows],
+  )
 
   const totalPay = rows.reduce((s, r) => s + r.overtimePay, 0)
   const totalHours = rows.reduce((s, r) => s + r.overtimeHours, 0)
@@ -234,6 +251,26 @@ export function OvertimeView({ role, userId }: { role: UserRole; userId: string 
             {f[0].toUpperCase() + f.slice(1)}
           </button>
         ))}
+      </div>
+      <div className="filter-row" style={{ marginTop: 10 }}>
+        <label className="form-field">
+          <span>Machine</span>
+          <select value={machineFilter} onChange={(event) => setMachineFilter(event.target.value)}>
+            <option value="">All machines</option>
+            {machineOptions.map(([id, machineNumber]) => (
+              <option key={id} value={id}>{machineNumber}</option>
+            ))}
+          </select>
+        </label>
+        <label className="form-field">
+          <span>Operator</span>
+          <select value={operatorFilter} onChange={(event) => setOperatorFilter(event.target.value)}>
+            <option value="">All operators</option>
+            {operatorOptions.map(([id, name]) => (
+              <option key={id} value={id}>{name}</option>
+            ))}
+          </select>
+        </label>
       </div>
 
       <div className="panel">

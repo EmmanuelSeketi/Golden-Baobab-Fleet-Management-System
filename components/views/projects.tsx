@@ -13,6 +13,7 @@ import {
   ModalSection,
   PageHeading,
   RowActions,
+  StatusBadge,
   ViewState,
 } from '@/components/shared'
 
@@ -23,6 +24,7 @@ type Project = {
   site_location: string | null
   deployment_start: string | null
   deployment_end: string | null
+  status: 'not_started' | 'ongoing' | 'completed'
   created_at: string
   customer: { company_name: string } | null
 }
@@ -30,7 +32,11 @@ type Project = {
 type CustomerPick = { id: string; company_name: string }
 
 const SELECT =
-  'id,name,customer_id,site_location,deployment_start,deployment_end,created_at,customer:customer_id(company_name)'
+  'id,name,customer_id,site_location,deployment_start,deployment_end,status,created_at,customer:customer_id(company_name)'
+
+function projectStatusLabel(status: Project['status']): string {
+  return status === 'not_started' ? 'Not started' : status === 'ongoing' ? 'Ongoing' : 'Completed'
+}
 
 export function ProjectsView({ role, userId }: { role: UserRole; userId: string }) {
   const supabase = useSupabase()
@@ -40,12 +46,15 @@ export function ProjectsView({ role, userId }: { role: UserRole; userId: string 
   const canManage = canManageProjects(role)
 
   const projects = useQuery<Project[]>(
-    () =>
-      supabase.from('project').select(SELECT).order('name') as unknown as PromiseLike<{
+    async () => {
+      const { error } = await supabase.rpc('complete_elapsed_projects')
+      if (error) return { data: null, error }
+      return await supabase.from('project').select(SELECT).order('name') as unknown as {
         data: Project[] | null
         error: unknown
-      }>,
-    [],
+      }
+    },
+    [canManage],
   )
 
   const rows = useMemo(() => {
@@ -102,6 +111,7 @@ export function ProjectsView({ role, userId }: { role: UserRole; userId: string 
                   <th>Customer</th>
                   <th>Site location</th>
                   <th>Deployment</th>
+                  <th>Status</th>
                   <th className="col-actions">Actions</th>
                 </tr>
               </thead>
@@ -116,6 +126,11 @@ export function ProjectsView({ role, userId }: { role: UserRole; userId: string 
                     <td>
                       {p.deployment_start ? shortDate(p.deployment_start) : 'N/A'} →{' '}
                       {p.deployment_end ? shortDate(p.deployment_end) : 'open'}
+                    </td>
+                    <td>
+                      <StatusBadge tone={p.status === 'completed' ? 'green' : p.status === 'ongoing' ? 'blue' : 'neutral'}>
+                        {projectStatusLabel(p.status)}
+                      </StatusBadge>
                     </td>
                     <td className="col-actions" onClick={(e) => e.stopPropagation()}>
                       <RowActions
@@ -252,6 +267,7 @@ function ProjectDetailModal({
               ['Site location', project.site_location ?? 'N/A'],
               ['Deployment start', project.deployment_start ? shortDate(project.deployment_start) : 'N/A'],
               ['Deployment end', project.deployment_end ? shortDate(project.deployment_end) : 'Open-ended'],
+              ['Status', projectStatusLabel(project.status)],
               ['Created', shortDate(project.created_at)],
             ]}
           />
@@ -346,6 +362,7 @@ function ProjectFormModal({
       site_location: row?.site_location ?? '',
       deployment_start: row?.deployment_start ?? '',
       deployment_end: row?.deployment_end ?? '',
+      status: row?.status ?? 'not_started',
     })
     setFieldErrors({})
     setFormError('')
@@ -370,6 +387,7 @@ function ProjectFormModal({
       site_location: form.site_location?.trim() ? form.site_location.trim() : null,
       deployment_start: form.deployment_start?.trim() ? form.deployment_start : null,
       deployment_end: form.deployment_end?.trim() ? form.deployment_end : null,
+      status: form.status || 'not_started',
     }
 
     setSaving(true)
@@ -457,6 +475,15 @@ function ProjectFormModal({
           onChange={(v) => set('deployment_end', v)}
           error={fieldErrors.deployment_end}
         />
+        <div className="form-field">
+          <label htmlFor="pj-status">Status</label>
+          <select id="pj-status" value={form.status ?? 'not_started'} onChange={(event) => set('status', event.target.value)}>
+            <option value="not_started">Not started</option>
+            <option value="ongoing">Ongoing</option>
+            <option value="completed">Completed</option>
+          </select>
+          <span className="field-hint">Projects are marked Completed the next time this page loads after their deployment end date.</span>
+        </div>
       </div>
     </Modal>
   )

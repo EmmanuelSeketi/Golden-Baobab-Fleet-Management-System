@@ -83,7 +83,7 @@ begin
     raise exception 'Not authorized to resolve contract coverage';
   end if;
 
-  select count(*), min(cm.id)
+  select count(*), (array_agg(cm.id))[1]
     into match_count, resolved_id
   from contract_machine cm
   where cm.machine_id = p_machine_id

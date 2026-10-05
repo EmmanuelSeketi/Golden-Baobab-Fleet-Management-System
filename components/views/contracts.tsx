@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { AlertTriangle, Eye, Pencil, Plus } from 'lucide-react'
+import { AlertTriangle, Eye, Pencil, Plus, Trash2 } from 'lucide-react'
 import { useSupabase } from '@/lib/supabase/use-supabase'
 import { useQuery } from '@/lib/gbi/use-query'
 import { contractStatusTone, invoiceStatusTone, money, shortDate, titleCase } from '@/lib/gbi/format'
@@ -70,6 +70,8 @@ type ContractDocumentHistory = {
   contract: Contract | null
 }
 
+type DeleteTarget = { kind: 'customer' | 'contract'; id: string; name: string } | null
+
 const CONTRACT_SELECT =
   'id,contract_number,customer_id,status,start_date,end_date,payment_terms_days,billing_frequency,customer:customer_id(company_name,customer_code,currency,contact_name,email,phone),contract_machine(count),billing_rule(count)'
 const CUSTOMER_SELECT =
@@ -81,6 +83,9 @@ export function ContractsView({ role, userId }: { role: UserRole; userId: string
   const [query, setQuery] = useState('')
   const canManage = canManageCommercial(role)
   const [docModal, setDocModal] = useState(false)
+  const [deleteTarget, setDeleteTarget] = useState<DeleteTarget>(null)
+  const [deleteBusy, setDeleteBusy] = useState(false)
+  const [deleteError, setDeleteError] = useState('')
 
   // Contract state
   const [selected, setSelected] = useState<Contract | null>(null)
@@ -136,6 +141,27 @@ export function ContractsView({ role, userId }: { role: UserRole; userId: string
     )
   }, [customers.data, query])
 
+  async function deleteRecord() {
+    if (!deleteTarget || deleteBusy) return
+    setDeleteBusy(true)
+    setDeleteError('')
+    const { error } = await supabase.rpc(
+      deleteTarget.kind === 'customer' ? 'delete_unused_customer' : 'delete_unused_contract',
+      deleteTarget.kind === 'customer' ? { p_customer_id: deleteTarget.id } : { p_contract_id: deleteTarget.id },
+    )
+    setDeleteBusy(false)
+    if (error) {
+      setDeleteError((error as { message?: string }).message ?? `Could not delete this ${deleteTarget.kind}.`)
+      setDeleteTarget(null)
+      return
+    }
+    setDeleteTarget(null)
+    setSelected(null)
+    setSelectedCustomer(null)
+    history.reload()
+    customers.reload()
+  }
+
   return (
     <div className="page-wrap">
       <PageHeading
@@ -174,6 +200,12 @@ export function ContractsView({ role, userId }: { role: UserRole; userId: string
           />
         </div>
       </div>
+      {deleteError && (
+        <div className="form-error" role="alert" style={{ marginBottom: 12 }}>
+          <AlertTriangle size={15} />
+          {deleteError}
+        </div>
+      )}
 
       {tab === 'contracts' ? (
         <div className="panel">
@@ -275,6 +307,11 @@ export function ContractsView({ role, userId }: { role: UserRole; userId: string
                                     icon: Pencil,
                                     onClick: () => setCustomerForm({ mode: 'edit', row: c }),
                                   },
+                                  {
+                                    label: 'Delete customer',
+                                    icon: Trash2,
+                                    onClick: () => setDeleteTarget({ kind: 'customer', id: c.id, name: c.company_name }),
+                                  },
                                 ]
                               : []),
                           ]}
@@ -305,6 +342,7 @@ export function ContractsView({ role, userId }: { role: UserRole; userId: string
         canManage={canManage}
         userId={userId}
         onEdit={() => selected && setContractForm({ mode: 'edit', row: selected })}
+        onDelete={() => selected && setDeleteTarget({ kind: 'contract', id: selected.id, name: selected.contract_number })}
         onClose={() => setSelected(null)}
       />
 
@@ -342,6 +380,21 @@ export function ContractsView({ role, userId }: { role: UserRole; userId: string
           }}
         />
       )}
+      <ConfirmDialog
+        open={deleteTarget !== null}
+        title={`Delete ${deleteTarget?.kind ?? 'record'}?`}
+        message={
+          <>
+            <b>{deleteTarget?.name}</b> will be permanently deleted only if it has no dependent project, contract,
+            billing, invoice, quotation, or document-history records. Referenced records are retained and the database
+            will block deletion.
+          </>
+        }
+        confirmLabel="Delete"
+        busy={deleteBusy}
+        onCancel={() => setDeleteTarget(null)}
+        onConfirm={() => void deleteRecord()}
+      />
     </div>
   )
 }
@@ -392,12 +445,14 @@ function ContractModal({
   canManage,
   userId,
   onEdit,
+  onDelete,
   onClose,
 }: {
   contract: Contract | null
   canManage: boolean
   userId: string
   onEdit: () => void
+  onDelete: () => void
   onClose: () => void
 }) {
   const supabase = useSupabase()
@@ -505,6 +560,10 @@ function ContractModal({
                   <button className="button button-secondary" onClick={onEdit}>
                     <Pencil size={14} />
                     Edit contract
+                  </button>
+                  <button className="button button-danger" onClick={onDelete}>
+                    <Trash2 size={14} />
+                    Delete contract
                   </button>
                 </div>
               )}

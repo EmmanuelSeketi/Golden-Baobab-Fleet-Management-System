@@ -663,6 +663,24 @@ nav { flex: 1; }.nav-group { margin-bottom: 21px; }.nav-group > small { display:
   line-height: 1.5;
 }
 
+.lifecycle-tabs { display: flex; width: fit-content; max-width: 100%; margin-bottom: 14px; }
+.lifecycle-tabs button { justify-content: center; min-width: 112px; }
+.lifecycle-document-heading { display: flex; align-items: baseline; gap: 10px; margin-bottom: 18px; }
+.lifecycle-document-heading h2 { margin: 0; color: #1b2a2f; font-size: 17px; font-weight: 600; }
+.lifecycle-document-heading span { color: #71808a; font-size: 13px; }
+.lifecycle-modal-section { margin-top: 22px; }
+.lifecycle-modal-section-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid #eef1f2; }
+.lifecycle-modal-section-head h3 { margin: 0; color: #1b2a2f; font-size: 12px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; }
+.lifecycle-modal-section-head span { color: #71808a; font-size: 12px; }
+.lifecycle-item-card { margin-bottom: 10px; padding: 12px; border: 1px solid #e6eaeb; border-radius: 8px; background: #fbfcfc; }
+.lifecycle-item-heading { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin-bottom: 10px; }
+.lifecycle-item-heading b { color: #202b31; font-size: 13px; }
+.lifecycle-item-heading span { color: #71808a; font-size: 12px; text-align: right; }
+.lifecycle-item-card .form-grid { gap: 10px 12px; }
+.lifecycle-row-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 5px; }
+.lifecycle-delete-button { color: #b42318; border-color: #eccbc8; }
+.lifecycle-delete-button:hover { background: #fff5f4; border-color: #e3b5b0; }
+
 .lifecycle-template-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));

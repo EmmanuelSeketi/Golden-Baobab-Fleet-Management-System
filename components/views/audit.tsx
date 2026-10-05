@@ -26,21 +26,45 @@ const ACTION_TONE: Record<string, Tone> = {
   void: 'red',
 }
 
+type AuditPage = { rows: Audit[]; total: number }
+type AuditQueryRow = Omit<Audit, 'user'> & { user: Audit['user'] | Audit['user'][] }
+
 export function AuditView() {
   const supabase = useSupabase()
   const [selected, setSelected] = useState<Audit | null>(null)
+  const [page, setPage] = useState(1)
 
-  const logs = useQuery<Audit[]>(
+  const pageSize = 10
+  const logs = useQuery<AuditPage>(
     () =>
       supabase
         .from('audit_log')
-        .select('id,entity_type,entity_id,action,changed_fields,reason,created_at,user:user_id(full_name)')
+        .select('id,entity_type,entity_id,action,changed_fields,reason,created_at,user:user_id(full_name)', {
+          count: 'exact',
+        })
         .order('created_at', { ascending: false })
-        .limit(100) as unknown as PromiseLike<{ data: Audit[] | null; error: unknown }>,
-    [],
+        .range((page - 1) * pageSize, page * pageSize - 1)
+        .then(({ data, error, count }) => ({
+          data:
+            data && count !== null
+              ? {
+                  rows: (data as AuditQueryRow[]).map((row) => ({
+                    ...row,
+                    user: Array.isArray(row.user) ? row.user[0] ?? null : row.user,
+                  })),
+                  total: count,
+                }
+              : null,
+          error: error ?? (count === null ? new Error('Could not determine the total number of audit entries.') : null),
+        })) as unknown as PromiseLike<{ data: AuditPage | null; error: unknown }>,
+    [page],
   )
 
-  const rows = logs.data ?? []
+  const rows = logs.data?.rows ?? []
+  const total = logs.data?.total ?? 0
+  const pageCount = Math.max(1, Math.ceil(total / pageSize))
+  const currentPage = Math.min(page, pageCount)
+  const pageStart = (currentPage - 1) * pageSize
 
   return (
     <div className="page-wrap">
@@ -53,7 +77,7 @@ export function AuditView() {
         <ViewState
           status={logs.status}
           error={logs.error}
-          isEmpty={rows.length === 0}
+          isEmpty={total === 0}
           title="audit log"
           emptyText="No audit entries recorded yet."
           onRetry={logs.reload}
@@ -84,6 +108,30 @@ export function AuditView() {
               </tbody>
             </table>
           </div>
+          {total > pageSize && (
+            <div className="mh-pagination" aria-label="Audit log pagination">
+              <span>
+                Showing {pageStart + 1}–{Math.min(pageStart + pageSize, total)} of {total}
+              </span>
+              <div>
+                <button
+                  className="button button-secondary"
+                  onClick={() => setPage((current) => Math.max(1, currentPage - 1))}
+                  disabled={currentPage <= 1}
+                >
+                  Previous
+                </button>
+                <span>Page {currentPage} of {pageCount}</span>
+                <button
+                  className="button button-secondary"
+                  onClick={() => setPage((current) => Math.min(pageCount, currentPage + 1))}
+                  disabled={currentPage >= pageCount}
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          )}
         </ViewState>
       </div>
 

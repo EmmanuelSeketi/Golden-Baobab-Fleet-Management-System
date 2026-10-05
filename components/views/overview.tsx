@@ -475,7 +475,7 @@ export function OverviewView({ role, fullName }: { role: UserRole; fullName: str
                   </tr>
                 </thead>
                 <tbody>
-                  {(maintenance.data ?? []).slice(0, 6).map((m) => (
+                  {(maintenance.data ?? []).slice(0, 4).map((m) => (
                     <tr key={m.id}>
                       <td>
                         <b className="mono">{m.machine?.machine_number ?? 'N/A'}</b>
