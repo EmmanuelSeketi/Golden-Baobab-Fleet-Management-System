@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { AlertTriangle, Download, Eye, Pencil, Plus } from 'lucide-react'
+import { AlertTriangle, Eye, Pencil, Plus } from 'lucide-react'
 import { useSupabase } from '@/lib/supabase/use-supabase'
 import { useQuery } from '@/lib/gbi/use-query'
 import { contractStatusTone, invoiceStatusTone, money, shortDate, titleCase } from '@/lib/gbi/format'
@@ -58,6 +58,18 @@ type Customer = {
   contract: { count: number }[]
 }
 
+type ContractDocumentHistory = {
+  id: string
+  contract_id: string
+  contract_number: string
+  customer_name: string
+  project_name: string
+  document_date: string
+  equipment: { machine_id?: string }[]
+  created_at: string
+  contract: Contract | null
+}
+
 const CONTRACT_SELECT =
   'id,contract_number,customer_id,status,start_date,end_date,payment_terms_days,billing_frequency,customer:customer_id(company_name,customer_code,currency,contact_name,email,phone),contract_machine(count),billing_rule(count)'
 const CUSTOMER_SELECT =
@@ -68,23 +80,25 @@ export function ContractsView({ role, userId }: { role: UserRole; userId: string
   const [tab, setTab] = useState<'contracts' | 'customers'>('contracts')
   const [query, setQuery] = useState('')
   const canManage = canManageCommercial(role)
-  const [docModal, setDocModal] = useState<{ contractNumber?: string; lessee?: string } | null>(null)
+  const [docModal, setDocModal] = useState(false)
 
   // Contract state
   const [selected, setSelected] = useState<Contract | null>(null)
-  const [contractForm, setContractForm] = useState<{ mode: 'add' | 'edit'; row: Contract | null } | null>(null)
+  const [contractForm, setContractForm] = useState<{ mode: 'edit'; row: Contract } | null>(null)
 
   // Customer state
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null)
   const [customerForm, setCustomerForm] = useState<{ mode: 'add' | 'edit'; row: Customer | null } | null>(null)
 
-  const contracts = useQuery<Contract[]>(
+  const history = useQuery<ContractDocumentHistory[]>(
     () =>
       supabase
-        .from('contract')
-        .select(CONTRACT_SELECT)
+        .from('contract_document_history')
+        .select(
+          `id,contract_id,contract_number,customer_name,project_name,document_date,equipment,created_at,contract:contract_id(${CONTRACT_SELECT})`,
+        )
         .order('created_at', { ascending: false }) as unknown as PromiseLike<{
-        data: Contract[] | null
+        data: ContractDocumentHistory[] | null
         error: unknown
       }>,
     [],
@@ -98,16 +112,17 @@ export function ContractsView({ role, userId }: { role: UserRole; userId: string
     [],
   )
 
-  const contractRows = useMemo(() => {
-    const all = contracts.data ?? []
+  const historyRows = useMemo(() => {
+    const all = history.data ?? []
     if (!query.trim()) return all
     const q = query.toLowerCase()
     return all.filter(
-      (c) =>
-        c.contract_number.toLowerCase().includes(q) ||
-        (c.customer?.company_name ?? '').toLowerCase().includes(q),
+      (row) =>
+        row.contract_number.toLowerCase().includes(q) ||
+        row.customer_name.toLowerCase().includes(q) ||
+        row.project_name.toLowerCase().includes(q),
     )
-  }, [contracts.data, query])
+  }, [history.data, query])
 
   const customerRows = useMemo(() => {
     const all = customers.data ?? []
@@ -125,25 +140,17 @@ export function ContractsView({ role, userId }: { role: UserRole; userId: string
     <div className="page-wrap">
       <PageHeading
         title="Customers & Contracts"
-        description="Signed agreements, the machines they cover and the effective billing rules per contract."
+        description="Generate project-based contracts and review their document history."
         action={
           <div className="heading-actions">
-            {canManage && (
-              <button className="button button-secondary" onClick={() => setDocModal({})}>
-                <Download size={14} /> Generate contract
+            {canManage && tab === 'contracts' && (
+              <button className="button button-primary" onClick={() => setDocModal(true)}>
+                <Plus size={15} /> New Contract
               </button>
             )}
-            {canManage && (
-              <button
-                className="button button-primary"
-                onClick={() =>
-                  tab === 'contracts'
-                    ? setContractForm({ mode: 'add', row: null })
-                    : setCustomerForm({ mode: 'add', row: null })
-                }
-              >
-                <Plus size={15} />
-                {tab === 'contracts' ? 'New contract' : 'New customer'}
+            {canManage && tab === 'customers' && (
+              <button className="button button-primary" onClick={() => setCustomerForm({ mode: 'add', row: null })}>
+                <Plus size={15} /> New customer
               </button>
             )}
           </div>
@@ -161,7 +168,7 @@ export function ContractsView({ role, userId }: { role: UserRole; userId: string
         </div>
         <div className="toolbar-search">
           <input
-            placeholder={tab === 'contracts' ? 'Search contract or customer…' : 'Search company, code or contact…'}
+            placeholder={tab === 'contracts' ? 'Search contract, customer or project…' : 'Search company, code or contact…'}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
@@ -171,12 +178,12 @@ export function ContractsView({ role, userId }: { role: UserRole; userId: string
       {tab === 'contracts' ? (
         <div className="panel">
           <ViewState
-            status={contracts.status}
-            error={contracts.error}
-            isEmpty={contractRows.length === 0}
-            title="contracts"
-            emptyText={query ? 'No contracts match your search.' : 'No contracts recorded yet.'}
-            onRetry={contracts.reload}
+            status={history.status}
+            error={history.error}
+            isEmpty={historyRows.length === 0}
+            title="contract history"
+            emptyText={query ? 'No generated contracts match your search.' : 'No contracts have been generated yet.'}
+            onRetry={history.reload}
           >
             <div className="table-scroll">
               <table className="data-table">
@@ -184,44 +191,36 @@ export function ContractsView({ role, userId }: { role: UserRole; userId: string
                   <tr>
                     <th>Contract</th>
                     <th>Customer</th>
-                    <th>Period</th>
+                    <th>Project</th>
+                    <th>Generated on</th>
                     <th>Machines</th>
-                    <th>Rules</th>
                     <th>Status</th>
                     <th className="col-actions">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {contractRows.map((c) => (
-                    <tr key={c.id} className="clickable-row" onClick={() => setSelected(c)}>
+                  {historyRows.map((row) => (
+                    <tr
+                      key={row.id}
+                      className={row.contract ? 'clickable-row' : ''}
+                      onClick={() => row.contract && setSelected(row.contract)}
+                    >
                       <td>
-                        <b>{c.contract_number}</b>
-                        <div className="muted-cell">{titleCase(c.billing_frequency)}</div>
+                        <b>{row.contract_number}</b>
                       </td>
-                      <td>{c.customer?.company_name ?? 'N/A'}</td>
-                      <td>
-                        {shortDate(c.start_date)} → {c.end_date ? shortDate(c.end_date) : 'open'}
-                      </td>
-                      <td>{c.contract_machine?.[0]?.count ?? 0}</td>
-                      <td>{c.billing_rule?.[0]?.count ?? 0}</td>
-                      <td>
-                        <StatusBadge tone={contractStatusTone(c.status)}>{titleCase(c.status)}</StatusBadge>
-                      </td>
+                      <td>{row.customer_name}</td>
+                      <td>{row.project_name}</td>
+                      <td>{shortDate(row.document_date)}</td>
+                      <td>{row.equipment.length}</td>
+                      <td>{row.contract && <StatusBadge tone={contractStatusTone(row.contract.status)}>{titleCase(row.contract.status)}</StatusBadge>}</td>
                       <td className="col-actions" onClick={(e) => e.stopPropagation()}>
                         <RowActions
-                          label={`Actions for ${c.contract_number}`}
-                          actions={[
-                            { label: 'View details', icon: Eye, onClick: () => setSelected(c) },
-                            ...(canManage
-                              ? [
-                                  {
-                                    label: 'Edit contract',
-                                    icon: Pencil,
-                                    onClick: () => setContractForm({ mode: 'edit', row: c }),
-                                  },
-                                ]
-                              : []),
-                          ]}
+                          label={`Actions for ${row.contract_number}`}
+                          actions={
+                            row.contract
+                              ? [{ label: 'View details', icon: Eye, onClick: () => row.contract && setSelected(row.contract) }]
+                              : []
+                          }
                         />
                       </td>
                     </tr>
@@ -292,11 +291,12 @@ export function ContractsView({ role, userId }: { role: UserRole; userId: string
 
       {canManage && (
         <ContractDocModal
-          open={!!docModal}
-          customers={(customers.data ?? []).map((c) => ({ id: c.id, company_name: c.company_name }))}
-          defaultContractNumber={docModal?.contractNumber}
-          defaultLessee={docModal?.lessee}
-          onClose={() => setDocModal(null)}
+          open={docModal}
+          onClose={() => setDocModal(false)}
+          onSaved={() => {
+            history.reload()
+            customers.reload()
+          }}
         />
       )}
 
@@ -304,9 +304,6 @@ export function ContractsView({ role, userId }: { role: UserRole; userId: string
         contract={selected}
         canManage={canManage}
         userId={userId}
-        onGenerateDoc={() =>
-          selected && setDocModal({ contractNumber: selected.contract_number, lessee: selected.customer?.company_name })
-        }
         onEdit={() => selected && setContractForm({ mode: 'edit', row: selected })}
         onClose={() => setSelected(null)}
       />
@@ -327,7 +324,7 @@ export function ContractsView({ role, userId }: { role: UserRole; userId: string
           onSaved={() => {
             setContractForm(null)
             setSelected(null)
-            contracts.reload()
+            history.reload()
           }}
         />
       )}
@@ -341,7 +338,7 @@ export function ContractsView({ role, userId }: { role: UserRole; userId: string
             setCustomerForm(null)
             setSelectedCustomer(null)
             customers.reload()
-            contracts.reload()
+            history.reload()
           }}
         />
       )}
@@ -395,14 +392,12 @@ function ContractModal({
   canManage,
   userId,
   onEdit,
-  onGenerateDoc,
   onClose,
 }: {
   contract: Contract | null
   canManage: boolean
   userId: string
   onEdit: () => void
-  onGenerateDoc: () => void
   onClose: () => void
 }) {
   const supabase = useSupabase()
@@ -507,10 +502,6 @@ function ContractModal({
               <StatusBadge tone={contractStatusTone(contract.status)}>{titleCase(contract.status)}</StatusBadge>
               {canManage && (
                 <div className="modal-foot-actions">
-                  <button className="button button-secondary" onClick={onGenerateDoc}>
-                    <Download size={14} />
-                    Generate document
-                  </button>
                   <button className="button button-secondary" onClick={onEdit}>
                     <Pencil size={14} />
                     Edit contract
@@ -804,7 +795,7 @@ function ContractFormModal({
   onClose,
   onSaved,
 }: {
-  state: { mode: 'add' | 'edit'; row: Contract | null } | null
+  state: { mode: 'edit'; row: Contract } | null
   userId: string
   customers: Customer[]
   onClose: () => void
@@ -812,7 +803,6 @@ function ContractFormModal({
 }) {
   const supabase = useSupabase()
   const open = state !== null
-  const mode = state?.mode ?? 'add'
   const row = state?.row ?? null
   const [form, setForm] = useState<Record<string, string>>({})
   const [saving, setSaving] = useState(false)
@@ -821,28 +811,26 @@ function ContractFormModal({
 
   useEffect(() => {
     if (!open) return
-    if (mode === 'edit' && row) {
-      setForm({
-        contract_number: row.contract_number ?? '',
-        customer_id: row.customer_id ?? '',
-        status: row.status ?? 'draft',
-        start_date: row.start_date ?? '',
-        end_date: row.end_date ?? '',
-        payment_terms_days: String(row.payment_terms_days ?? 30),
-        billing_frequency: row.billing_frequency ?? 'monthly',
-      })
-    } else {
-      setForm({ status: 'draft', billing_frequency: 'monthly', payment_terms_days: '30' })
-    }
+    if (!row) return
+    setForm({
+      contract_number: row.contract_number ?? '',
+      customer_id: row.customer_id ?? '',
+      status: row.status ?? 'draft',
+      start_date: row.start_date ?? '',
+      end_date: row.end_date ?? '',
+      payment_terms_days: String(row.payment_terms_days ?? 30),
+      billing_frequency: row.billing_frequency ?? 'monthly',
+    })
     setFieldErrors({})
     setFormError('')
-  }, [open, mode, row])
+  }, [open, row])
 
   function set(k: string, v: string) {
     setForm((f) => ({ ...f, [k]: v }))
   }
 
   async function submit() {
+    if (!row) return
     const errors: Record<string, string> = {}
     if (!form.contract_number?.trim()) errors.contract_number = 'Contract number is required.'
     if (!form.customer_id) errors.customer_id = 'Select a customer.'
@@ -864,10 +852,7 @@ function ContractFormModal({
     }
 
     setSaving(true)
-    const { error } =
-      mode === 'edit' && row
-        ? await supabase.from('contract').update({ ...payload, updated_by: userId }).eq('id', row.id)
-        : await supabase.from('contract').insert({ ...payload, created_by: userId })
+    const { error } = await supabase.from('contract').update({ ...payload, updated_by: userId }).eq('id', row.id)
     setSaving(false)
 
     if (error) {
@@ -891,19 +876,15 @@ function ContractFormModal({
       open={open}
       onClose={saving ? () => {} : onClose}
       eyebrow="Commercial"
-      title={mode === 'edit' ? 'Edit contract' : 'New contract'}
-      subtitle={
-        mode === 'edit'
-          ? 'Update the contract terms, period and status.'
-          : 'Create a contract, then add its billing rules and covered machines from the contract detail.'
-      }
+      title="Edit contract"
+      subtitle="Update the contract terms, period and status."
       footer={
         <div className="footer-actions">
           <button className="button button-secondary" onClick={onClose} disabled={saving}>
             Cancel
           </button>
           <button className="button button-primary" onClick={submit} disabled={saving}>
-            {saving ? 'Saving…' : mode === 'edit' ? 'Save changes' : 'Create contract'}
+            {saving ? 'Saving…' : 'Save changes'}
           </button>
         </div>
       }

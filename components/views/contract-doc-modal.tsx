@@ -1,113 +1,294 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Download, Plus, Trash2 } from 'lucide-react'
+import { AlertTriangle, Download, Plus, Trash2 } from 'lucide-react'
 import { Modal, ModalSection } from '@/components/shared'
+import { useSupabase } from '@/lib/supabase/use-supabase'
+import { useQuery } from '@/lib/gbi/use-query'
+import { shortDate } from '@/lib/gbi/format'
 import { downloadContractDoc, type ContractLineItem, type LogoChoice } from '@/lib/gbi/contract-doc'
 
-type CustomerOption = { id: string; company_name: string }
-
-function emptyEquip(): ContractLineItem {
-  return { description: '', model: '', qty: '1', amount: '', period: '2', delivery: '' }
+type ProjectOption = {
+  id: string
+  name: string
+  customer_id: string | null
+  deployment_start: string | null
+  deployment_end: string | null
+  customer: { company_name: string } | null
 }
+
+type MachineOption = {
+  id: string
+  machine_number: string
+  machine_type: string
+  manufacturer: string | null
+  model: string | null
+}
+
+type EquipmentItem = ContractLineItem & { machine_id: string; machine_number: string }
+
 function emptyTransport(): ContractLineItem {
   return { description: '', model: '', qty: '1', amount: '', period: '', delivery: 'ONE WAY' }
 }
 
+function projectPeriodMonths(start: string | null, end: string | null): string {
+  if (!start || !end || end < start) return ''
+  const [startYear, startMonth, startDay] = start.split('-').map(Number)
+  const [endYear, endMonth, endDay] = end.split('-').map(Number)
+  const monthDifference = (endYear - startYear) * 12 + endMonth - startMonth
+  const anniversary = (monthsAfterStart: number) => {
+    const monthIndex = startYear * 12 + startMonth - 1 + monthsAfterStart
+    const year = Math.floor(monthIndex / 12)
+    const month = monthIndex % 12
+    const lastDay = new Date(Date.UTC(year, month + 1, 0)).getUTCDate()
+    return Date.UTC(year, month, Math.min(startDay, lastDay))
+  }
+  const endDate = Date.UTC(endYear, endMonth - 1, endDay)
+  const completedMonths = endDate < anniversary(monthDifference) ? monthDifference - 1 : monthDifference
+  const hasPartialMonth = endDate !== anniversary(completedMonths)
+  return String(Math.max(1, completedMonths + Number(hasPartialMonth)))
+}
+
 export function ContractDocModal({
   open,
-  customers,
-  defaultContractNumber,
-  defaultLessee,
   onClose,
+  onSaved,
 }: {
   open: boolean
-  customers: CustomerOption[]
-  defaultContractNumber?: string
-  defaultLessee?: string
   onClose: () => void
+  onSaved: () => void
 }) {
+  const supabase = useSupabase()
   const [contractNumber, setContractNumber] = useState('')
-  const [lessee, setLessee] = useState('')
+  const [projectId, setProjectId] = useState('')
   const [date, setDate] = useState('')
   const [logo, setLogo] = useState<LogoChoice>('gbi')
-  const [equipment, setEquipment] = useState<ContractLineItem[]>([emptyEquip()])
+  const [equipment, setEquipment] = useState<EquipmentItem[]>([])
   const [transport, setTransport] = useState<ContractLineItem[]>([emptyTransport()])
   const [busy, setBusy] = useState(false)
+  const [formError, setFormError] = useState('')
+  const [savedContractId, setSavedContractId] = useState<string | null>(null)
+
+  const projects = useQuery<ProjectOption[]>(
+    () =>
+      !open
+        ? Promise.resolve({ data: [], error: null })
+        : (supabase
+            .from('project')
+            .select('id,name,customer_id,deployment_start,deployment_end,customer:customer_id(company_name)')
+            .order('name') as unknown as PromiseLike<{ data: ProjectOption[] | null; error: unknown }>),
+    [open],
+  )
+
+  const machines = useQuery<MachineOption[]>(
+    () =>
+      !open || !projectId
+        ? Promise.resolve({ data: [], error: null })
+        : (supabase
+            .from('machine')
+            .select('id,machine_number,machine_type,manufacturer,model')
+            .eq('current_project_id', projectId)
+            .is('deleted_at', null)
+            .order('machine_number') as unknown as PromiseLike<{ data: MachineOption[] | null; error: unknown }>),
+    [open, projectId],
+  )
+
+  const selectedProject = (projects.data ?? []).find((project) => project.id === projectId) ?? null
+  const period = projectPeriodMonths(selectedProject?.deployment_start ?? null, selectedProject?.deployment_end ?? null)
+  const locked = busy || savedContractId !== null
 
   useEffect(() => {
-    if (open) {
-      setContractNumber(defaultContractNumber ?? '')
-      setLessee(defaultLessee ?? '')
-      setDate(new Date().toISOString().slice(0, 10))
-      setLogo('gbi')
-      setEquipment([emptyEquip()])
-      setTransport([emptyTransport()])
-    }
-  }, [open, defaultContractNumber, defaultLessee])
+    if (!open) return
+    setContractNumber('')
+    setProjectId('')
+    setDate(new Date().toISOString().slice(0, 10))
+    setLogo('gbi')
+    setEquipment([])
+    setTransport([emptyTransport()])
+    setBusy(false)
+    setFormError('')
+    setSavedContractId(null)
+  }, [open])
 
-  function patchEquip(index: number, key: keyof ContractLineItem, value: string) {
-    setEquipment((rows) => rows.map((r, i) => (i === index ? { ...r, [key]: value } : r)))
+  useEffect(() => {
+    if (!open || !projectId || machines.status !== 'ready') {
+      setEquipment([])
+      return
+    }
+    setEquipment(
+      (machines.data ?? []).map((machine) => ({
+        machine_id: machine.id,
+        machine_number: machine.machine_number,
+        description: machine.machine_type,
+        model: machine.model ?? machine.manufacturer ?? '',
+        qty: '1',
+        amount: '',
+        period,
+        delivery: '',
+      })),
+    )
+  }, [open, projectId, machines.status, machines.data, period])
+
+  function patchEquip(index: number, key: 'description' | 'model' | 'amount', value: string) {
+    setEquipment((rows) => rows.map((row, i) => (i === index ? { ...row, [key]: value } : row)))
   }
+
   function patchTransport(index: number, key: keyof ContractLineItem, value: string) {
-    setTransport((rows) => rows.map((r, i) => (i === index ? { ...r, [key]: value } : r)))
+    setTransport((rows) => rows.map((row, i) => (i === index ? { ...row, [key]: value } : row)))
   }
 
   async function generate() {
+    if (busy) return
+    if (!savedContractId) {
+      if (!contractNumber.trim()) return setFormError('Contract number is required.')
+      if (!selectedProject) return setFormError('Select a project.')
+      if (!selectedProject.customer_id || !selectedProject.customer?.company_name)
+        return setFormError('Link a customer to this project before generating its contract.')
+      if (!selectedProject.deployment_start || !selectedProject.deployment_end || !period)
+        return setFormError('Set valid project deployment start and end dates before generating its contract.')
+      if (machines.status !== 'ready') return setFormError('Wait for the project machines to finish loading.')
+      if (equipment.length === 0) return setFormError('The selected project has no currently assigned machines.')
+      if (equipment.some((item) => !item.description.trim() || !item.model.trim()))
+        return setFormError('Enter a description and model for each project machine.')
+      if (!date) return setFormError('Document date is required.')
+    }
+
     setBusy(true)
+    setFormError('')
+    let contractWasSaved = savedContractId !== null
     try {
-      await downloadContractDoc({ contractNumber, lessee, date, equipment, transport, logo })
+      if (!savedContractId) {
+        const { data, error } = await supabase.rpc('create_project_contract_document', {
+          p_contract_number: contractNumber.trim(),
+          p_project_id: projectId,
+          p_document_date: date,
+          p_logo_choice: logo,
+          p_equipment: equipment.map(({ machine_id, ...item }) => ({ ...item, machine_id })),
+          p_transport: transport,
+        })
+        if (error) {
+          const code = (error as { code?: string }).code
+          setFormError(
+            code === '23505'
+              ? 'A contract with this number already exists. Use a different contract number.'
+              : (error as { message?: string }).message ?? 'Could not save the contract. Please try again.',
+          )
+          return
+        }
+        if (!data) {
+          setFormError('The contract was not saved because the database did not return its record ID.')
+          return
+        }
+        setSavedContractId(data)
+        contractWasSaved = true
+        onSaved()
+      }
+
+      await downloadContractDoc({
+        contractNumber,
+        lessee: selectedProject?.customer?.company_name ?? '',
+        date,
+        equipment,
+        transport,
+        logo,
+      })
       onClose()
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : 'Unknown document-generation error.'
+      setFormError(
+        contractWasSaved
+          ? `The contract is saved, but the document could not be downloaded: ${detail}`
+          : `Could not generate the contract document: ${detail}`,
+      )
     } finally {
       setBusy(false)
     }
   }
 
+  const canGenerate =
+    !busy &&
+    (savedContractId !== null ||
+      (Boolean(contractNumber.trim()) &&
+        Boolean(selectedProject?.customer_id) &&
+        Boolean(selectedProject?.deployment_start) &&
+        Boolean(selectedProject?.deployment_end) &&
+        machines.status === 'ready' &&
+        equipment.length > 0 &&
+        equipment.every((item) => item.description.trim() && item.model.trim()) &&
+        Boolean(date)))
+
   return (
     <Modal
       open={open}
-      onClose={onClose}
+      onClose={busy ? () => {} : onClose}
       eyebrow="Commercial"
-      title="Generate hire contract"
-      subtitle="Fill the details, then download a ready-to-sign Word document."
+      title="New Contract"
+      subtitle="Choose a project to load its assigned machines and contract period, then save and download the document."
       footer={
         <div className="modal-foot-actions" style={{ marginLeft: 'auto' }}>
           <button className="button button-secondary" onClick={onClose} disabled={busy}>
             Cancel
           </button>
-          <button className="button button-primary" onClick={generate} disabled={busy}>
+          <button className="button button-primary" onClick={generate} disabled={!canGenerate}>
             <Download size={14} />
-            {busy ? 'Generating…' : 'Generate & download'}
+            {busy ? 'Generating…' : savedContractId ? 'Retry download' : 'Save & download'}
           </button>
         </div>
       }
     >
       <div className="form-grid">
+        {formError && (
+          <div className="form-error">
+            <AlertTriangle size={15} />
+            {formError}
+          </div>
+        )}
         <label className="field">
           <span>Contract No.</span>
-          <input value={contractNumber} onChange={(e) => setContractNumber(e.target.value)} placeholder="e.g. GBI-2026-014" />
+          <input
+            value={contractNumber}
+            onChange={(event) => setContractNumber(event.target.value)}
+            placeholder="e.g. GBI-2026-014"
+            disabled={locked}
+          />
         </label>
         <label className="field">
-          <span>Date</span>
-          <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+          <span>Document date</span>
+          <input type="date" value={date} onChange={(event) => setDate(event.target.value)} disabled={locked} />
         </label>
         <label className="field field-full">
-          <span>Lessee (TO / 承租方)</span>
-          <input
-            value={lessee}
-            onChange={(e) => setLessee(e.target.value)}
-            placeholder="Company or person the equipment is hired to"
-            list="contract-doc-customers"
-          />
-          <datalist id="contract-doc-customers">
-            {customers.map((c) => (
-              <option key={c.id} value={c.company_name} />
+          <span>Project</span>
+          <select
+            value={projectId}
+            onChange={(event) => {
+              setProjectId(event.target.value)
+              setFormError('')
+            }}
+            disabled={locked || projects.status !== 'ready'}
+          >
+            <option value="">Select a project</option>
+            {(projects.data ?? []).map((project) => (
+              <option key={project.id} value={project.id}>
+                {project.name}{project.customer?.company_name ? ` · ${project.customer.company_name}` : ''}
+              </option>
             ))}
-          </datalist>
+          </select>
+          {projects.status === 'error' && <span className="field-error">Could not load projects. Close and try again.</span>}
         </label>
+        <label className="field field-full">
+          <span>Lessee</span>
+          <input value={selectedProject?.customer?.company_name ?? ''} readOnly placeholder="Select a customer-linked project" />
+        </label>
+        {selectedProject && (
+          <div className="field-hint field-full">
+            Project period: {selectedProject.deployment_start ? shortDate(selectedProject.deployment_start) : 'start date not set'} →{' '}
+            {selectedProject.deployment_end ? shortDate(selectedProject.deployment_end) : 'end date not set'}
+            {period ? ` · ${period} month${period === '1' ? '' : 's'}` : ''}
+          </div>
+        )}
         <label className="field field-full">
           <span>Header logo</span>
-          <select value={logo} onChange={(e) => setLogo(e.target.value as LogoChoice)}>
+          <select value={logo} onChange={(event) => setLogo(event.target.value as LogoChoice)} disabled={locked}>
             <option value="gbi">GBI Group</option>
             <option value="sdlg">SDLG</option>
             <option value="none">No logo</option>
@@ -115,46 +296,59 @@ export function ContractDocModal({
         </label>
       </div>
 
-      <ModalSection
-        title="Equipment & price (USD / month)"
-        count={equipment.length}
-        action={
-          <button className="mini-add" onClick={() => setEquipment((r) => [...r, emptyEquip()])}>
-            <Plus size={13} /> Add line
-          </button>
-        }
-      >
-        <p className="form-hint">16% VAT and the VAT-inclusive totals are calculated automatically in the document.</p>
-        {equipment.map((row, i) => (
-          <div className="doc-line-card" key={i}>
+      <ModalSection title="Equipment & price (USD / month)" count={equipment.length}>
+        <p className="form-hint">
+          Each current project machine creates one item. Quantity is one and period is calculated from the project dates;
+          description, model and rate can be reviewed before saving.
+        </p>
+        {machines.status === 'loading' && projectId && <p className="form-hint">Loading assigned machines…</p>}
+        {machines.status === 'error' && projectId && (
+          <p className="field-error">Could not load machines assigned to this project.</p>
+        )}
+        {machines.status === 'ready' && projectId && equipment.length === 0 && (
+          <p className="form-hint">No active machines are currently assigned to this project.</p>
+        )}
+        {equipment.map((row, index) => (
+          <div className="doc-line-card" key={row.machine_id}>
             <div className="doc-line-card-head">
-              <span className="doc-line-badge">Item {i + 1}</span>
-              {equipment.length > 1 && (
-                <button className="doc-line-remove" onClick={() => setEquipment((r) => r.filter((_, x) => x !== i))} aria-label="Remove item">
-                  <Trash2 size={14} /> Remove
-                </button>
-              )}
+              <span className="doc-line-badge">
+                Item {index + 1} · {row.machine_number}
+              </span>
             </div>
             <div className="form-grid">
               <label className="field field-full">
                 <span>Description 货品</span>
-                <input placeholder="e.g. Excavator 挖掘机" value={row.description} onChange={(e) => patchEquip(i, 'description', e.target.value)} />
+                <input
+                  value={row.description}
+                  onChange={(event) => patchEquip(index, 'description', event.target.value)}
+                  disabled={locked}
+                />
               </label>
               <label className="field">
                 <span>Model 型号</span>
-                <input placeholder="e.g. CAT 320D" value={row.model} onChange={(e) => patchEquip(i, 'model', e.target.value)} />
+                <input
+                  value={row.model}
+                  onChange={(event) => patchEquip(index, 'model', event.target.value)}
+                  disabled={locked}
+                />
               </label>
               <label className="field">
                 <span>Quantity 数量</span>
-                <input inputMode="numeric" placeholder="1" value={row.qty} onChange={(e) => patchEquip(i, 'qty', e.target.value)} />
+                <input value={row.qty} readOnly />
               </label>
               <label className="field">
                 <span>Rate: USD / month (excl. VAT)</span>
-                <input inputMode="decimal" placeholder="0.00" value={row.amount} onChange={(e) => patchEquip(i, 'amount', e.target.value)} />
+                <input
+                  inputMode="decimal"
+                  placeholder="0.00"
+                  value={row.amount}
+                  onChange={(event) => patchEquip(index, 'amount', event.target.value)}
+                  disabled={locked}
+                />
               </label>
               <label className="field">
                 <span>Period (months)</span>
-                <input inputMode="numeric" placeholder="2" value={row.period} onChange={(e) => patchEquip(i, 'period', e.target.value)} />
+                <input value={row.period} readOnly />
               </label>
             </div>
           </div>
@@ -165,17 +359,26 @@ export function ContractDocModal({
         title="Transportation (ZMW)"
         count={transport.length}
         action={
-          <button className="mini-add" onClick={() => setTransport((r) => [...r, emptyTransport()])}>
+          <button
+            className="mini-add"
+            onClick={() => setTransport((rows) => [...rows, emptyTransport()])}
+            disabled={locked}
+          >
             <Plus size={13} /> Add line
           </button>
         }
       >
-        {transport.map((row, i) => (
-          <div className="doc-line-card" key={i}>
+        {transport.map((row, index) => (
+          <div className="doc-line-card" key={index}>
             <div className="doc-line-card-head">
-              <span className="doc-line-badge">Item {i + 1}</span>
+              <span className="doc-line-badge">Item {index + 1}</span>
               {transport.length > 1 && (
-                <button className="doc-line-remove" onClick={() => setTransport((r) => r.filter((_, x) => x !== i))} aria-label="Remove item">
+                <button
+                  className="doc-line-remove"
+                  onClick={() => setTransport((rows) => rows.filter((_, rowIndex) => rowIndex !== index))}
+                  disabled={locked}
+                  aria-label="Remove item"
+                >
                   <Trash2 size={14} /> Remove
                 </button>
               )}
@@ -183,23 +386,50 @@ export function ContractDocModal({
             <div className="form-grid">
               <label className="field field-full">
                 <span>Description</span>
-                <input placeholder="e.g. Low-bed transport 平板运输" value={row.description} onChange={(e) => patchTransport(i, 'description', e.target.value)} />
+                <input
+                  placeholder="e.g. Low-bed transport 平板运输"
+                  value={row.description}
+                  onChange={(event) => patchTransport(index, 'description', event.target.value)}
+                  disabled={locked}
+                />
               </label>
               <label className="field">
                 <span>Model</span>
-                <input placeholder="Optional" value={row.model} onChange={(e) => patchTransport(i, 'model', e.target.value)} />
+                <input
+                  placeholder="Optional"
+                  value={row.model}
+                  onChange={(event) => patchTransport(index, 'model', event.target.value)}
+                  disabled={locked}
+                />
               </label>
               <label className="field">
                 <span>Quantity</span>
-                <input inputMode="numeric" placeholder="1" value={row.qty} onChange={(e) => patchTransport(i, 'qty', e.target.value)} />
+                <input
+                  inputMode="numeric"
+                  placeholder="1"
+                  value={row.qty}
+                  onChange={(event) => patchTransport(index, 'qty', event.target.value)}
+                  disabled={locked}
+                />
               </label>
               <label className="field">
                 <span>Amount: ZMW (excl. VAT)</span>
-                <input inputMode="decimal" placeholder="0.00" value={row.amount} onChange={(e) => patchTransport(i, 'amount', e.target.value)} />
+                <input
+                  inputMode="decimal"
+                  placeholder="0.00"
+                  value={row.amount}
+                  onChange={(event) => patchTransport(index, 'amount', event.target.value)}
+                  disabled={locked}
+                />
               </label>
               <label className="field">
                 <span>Delivery</span>
-                <input placeholder="ONE WAY" value={row.delivery} onChange={(e) => patchTransport(i, 'delivery', e.target.value)} />
+                <input
+                  placeholder="ONE WAY"
+                  value={row.delivery}
+                  onChange={(event) => patchTransport(index, 'delivery', event.target.value)}
+                  disabled={locked}
+                />
               </label>
             </div>
           </div>
