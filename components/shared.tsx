@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { AlertTriangle, ArrowUpRight, Inbox, Loader2, MoreHorizontal, X } from 'lucide-react'
+import { AlertTriangle, ArrowUpRight, Inbox, MoreHorizontal, X } from 'lucide-react'
 import type { Tone } from '@/lib/gbi/format'
 import type { QueryStatus } from '@/lib/gbi/use-query'
 
@@ -11,17 +11,17 @@ export function PageHeading({
   description,
   action,
 }: {
-  eyebrow: string
+  eyebrow?: string
   title: string
-  description: string
+  description?: string
   action?: React.ReactNode
 }) {
   return (
     <div className="page-heading">
       <div>
-        <div className="eyebrow">{eyebrow}</div>
-        <h1>{title}</h1>
-        <p>{description}</p>
+        {eyebrow ? <div className="eyebrow">{eyebrow}</div> : null}
+        <h1 className="page-title">{title}</h1>
+        {description ? <p className="page-subtitle">{description}</p> : null}
       </div>
       {action}
     </div>
@@ -49,36 +49,48 @@ export function KpiCard({
   sub,
   trend,
   icon: Icon,
+  iconSrc,
   tone = 'gold',
 }: {
   label: string
-  value: string
-  sub: string
+  value: React.ReactNode
+  sub?: string
   trend?: string
   icon?: React.ElementType
+  iconSrc?: string
   tone?: string
 }) {
   return (
     <div className="kpi-card">
       {Icon ? (
-        <div className={`kpi-icon ${tone}`}>
-          <Icon size={18} />
-        </div>
+        <Icon size={28} className="kpi-icon" />
+      ) : iconSrc ? (
+        <img src={iconSrc} alt="" width={28} height={28} className="kpi-icon" />
       ) : null}
       <div className="kpi-copy">
-        <span>{label}</span>
-        <strong>{value}</strong>
-        <small>
-          {trend ? (
-            <b className="trend-up">
-              <ArrowUpRight size={13} />
-              {trend}
-            </b>
-          ) : null}
-          {sub}
-        </small>
+        <span className="stat-label">{label}</span>
+        <strong className="stat-value num">{value}</strong>
+        {trend || sub ? (
+          <small>
+            {trend ? (
+              <b className="trend-up">
+                <ArrowUpRight size={13} />
+                {trend}
+              </b>
+            ) : null}
+            {sub}
+          </small>
+        ) : null}
       </div>
     </div>
+  )
+}
+
+export function LoadingSpinner({ label = 'Loading', small = false }: { label?: string; small?: boolean }) {
+  return (
+    <span className={`loading-spinner${small ? ' small' : ''}`} role="status" aria-label={label}>
+      <span aria-hidden="true" />
+    </span>
   )
 }
 
@@ -109,7 +121,7 @@ export function ViewState({
   if (status === 'loading') {
     return (
       <div className="data-state">
-        <Loader2 size={20} className="spin" />
+        <LoadingSpinner />
         <div>
           <b>Loading {title}…</b>
           <p>Fetching live records from Supabase.</p>
@@ -211,7 +223,7 @@ export function DetailGrid({ items }: { items: [string, React.ReactNode][] }) {
       {items.map(([label, value]) => (
         <div key={label} className="detail-item">
           <dt>{label}</dt>
-          <dd>{value ?? '—'}</dd>
+          <dd>{value ?? 'N/A'}</dd>
         </div>
       ))}
     </dl>
@@ -254,7 +266,14 @@ export function MiniState({
   isEmpty: boolean
   emptyText: string
 }) {
-  if (status === 'loading') return <p className="mini-state">Loading…</p>
+  if (status === 'loading') {
+    return (
+      <p className="mini-state mini-state-loading">
+        <LoadingSpinner small />
+        <span>Loading…</span>
+      </p>
+    )
+  }
   if (status === 'error') return <p className="mini-state error">{error}</p>
   if (isEmpty) return <p className="mini-state">{emptyText}</p>
   return null
@@ -273,7 +292,17 @@ export type RowAction = {
  * menu is fixed-positioned from the trigger's rect so it is never clipped by the
  * table's horizontal scroll container.
  */
-export function RowActions({ actions, label = 'Row actions' }: { actions: RowAction[]; label?: string }) {
+export function RowActions({
+  actions,
+  label = 'Row actions',
+  showActionIcons = true,
+  showTriggerIcon = true,
+}: {
+  actions: RowAction[]
+  label?: string
+  showActionIcons?: boolean
+  showTriggerIcon?: boolean
+}) {
   const [open, setOpen] = useState(false)
   const [coords, setCoords] = useState({ top: 0, left: 0 })
   const btnRef = useRef<HTMLButtonElement>(null)
@@ -285,7 +314,7 @@ export function RowActions({ actions, label = 'Row actions' }: { actions: RowAct
     const onDocDown = (e: MouseEvent) => {
       const target = e.target as Node
       // The menu is a fixed-positioned sibling of the trigger, so it must be
-      // excluded here too — otherwise mousedown closes it before a menu item's
+      // excluded here too : otherwise mousedown closes it before a menu item's
       // click can fire.
       if (btnRef.current?.contains(target) || menuRef.current?.contains(target)) return
       setOpen(false)
@@ -317,13 +346,13 @@ export function RowActions({ actions, label = 'Row actions' }: { actions: RowAct
       <button
         ref={btnRef}
         type="button"
-        className={`row-action-trigger${open ? ' is-open' : ''}`}
+        className={`row-action-trigger${showTriggerIcon ? '' : ' labelled'}${open ? ' is-open' : ''}`}
         aria-haspopup="menu"
         aria-expanded={open}
         aria-label={label}
         onClick={toggle}
       >
-        <MoreHorizontal size={16} />
+        {showTriggerIcon ? <MoreHorizontal size={16} /> : 'Actions'}
       </button>
       {open && (
         <div
@@ -347,7 +376,7 @@ export function RowActions({ actions, label = 'Row actions' }: { actions: RowAct
                   a.onClick()
                 }}
               >
-                <Icon size={15} />
+                {showActionIcons && <Icon size={15} />}
                 {a.label}
               </button>
             )
@@ -361,7 +390,7 @@ export function RowActions({ actions, label = 'Row actions' }: { actions: RowAct
 /**
  * Confirmation dialog for destructive actions. Renders above the detail modal
  * (higher z-index) so an operator/machine can be deleted straight from its
- * profile. Never performs the action itself — the caller owns the mutation.
+ * profile. Never performs the action itself : the caller owns the mutation.
  */
 export function ConfirmDialog({
   open,

@@ -13,7 +13,7 @@ export const ZH: Record<string, string> = {
   Governance: '治理',
 
   // Page titles
-  'Billing & Invoices': '账单与发票',
+  'Hiring Quotations': '租赁报价',
   'Daily Working Hours': '每日工时',
   'Fleet Register': '车队登记',
   'Projects & Sites': '项目与工地',
@@ -259,7 +259,7 @@ export const ZH: Record<string, string> = {
   'No billing rules recorded.': '未记录计费规则。',
   'No machines linked to this contract.': '此合同未关联任何机器。',
   'No invoices raised on this contract.': '此合同未开具任何发票。',
-  'No lifecycle events — this machine has no active contract coverage.':
+  'No lifecycle events : this machine has no active contract coverage.':
     '没有生命周期事件，此机器没有生效的合同覆盖。',
   'Select a machine to view its full history': '选择一台机器以查看其完整历史',
 

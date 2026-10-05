@@ -6,7 +6,7 @@ import { useSupabase } from '@/lib/supabase/use-supabase'
 import { useQuery } from '@/lib/gbi/use-query'
 import { friendlyError, hours as fmtHours, meter, shortDate } from '@/lib/gbi/format'
 import { buildMatrix, exportCsvSections, exportXlsxSheets, type ExportColumn } from '@/lib/gbi/export'
-import { DetailGrid, Modal, PageHeading, StatusBadge, ViewState } from '@/components/shared'
+import { DetailGrid, LoadingSpinner, Modal, PageHeading, StatusBadge, ViewState } from '@/components/shared'
 import { DailyHoursEntry } from '@/components/views/daily-hours-entry'
 import type { UserRole } from '@/lib/gbi/roles'
 
@@ -146,14 +146,14 @@ export function DailyHoursView({ role, userId }: { role: UserRole; userId: strin
     return (
       <tr key={r.id} className="clickable-row" onClick={() => setSelected(r)}>
         <td>
-          <b>{r.machine?.machine_number ?? '—'}</b>
+          <b className="mono">{r.machine?.machine_number ?? 'N/A'}</b>
           <div className="muted-cell">{r.machine?.machine_type ?? ''}</div>
         </td>
-        <td>{r.machine?.chassis_number ?? '—'}</td>
-        <td>{r.operator?.full_name ?? '—'}</td>
-        {!grouped && <td>{r.project?.name ?? '—'}</td>}
-        <td>{meter(r.hour_meter_start)}</td>
-        <td>{meter(r.hour_meter_end)}</td>
+        <td className="mono">{r.machine?.chassis_number ?? 'N/A'}</td>
+        <td>{r.operator?.full_name ?? 'N/A'}</td>
+        {!grouped && <td>{r.project?.name ?? 'N/A'}</td>}
+        <td className="mono num">{meter(r.hour_meter_start)}</td>
+        <td className="mono num">{meter(r.hour_meter_end)}</td>
         <td>
           <b>{fmtHours(r.total_hours)}</b>
         </td>
@@ -171,7 +171,6 @@ export function DailyHoursView({ role, userId }: { role: UserRole; userId: strin
   return (
     <div className="page-wrap">
       <PageHeading
-        eyebrow="Operations"
         title="Daily Working Hours"
         description="Hour-meter readings captured per machine, per day."
       />
@@ -189,7 +188,7 @@ export function DailyHoursView({ role, userId }: { role: UserRole; userId: strin
             try {
               dateInputRef.current?.showPicker?.()
             } catch {
-              /* showPicker unsupported/blocked — focusing the input still works */
+              /* showPicker unsupported/blocked : focusing the input still works */
             }
           }}
         >
@@ -236,15 +235,15 @@ export function DailyHoursView({ role, userId }: { role: UserRole; userId: strin
       <div className="hours-summary">
         <div>
           <span>Entries</span>
-          <b>{entries.status === 'ready' ? rows.length : '—'}</b>
+          <b>{entries.status === 'loading' ? <LoadingSpinner small /> : entries.status === 'ready' ? rows.length : 'N/A'}</b>
         </div>
         <div>
           <span>Total hours</span>
-          <b>{entries.status === 'ready' ? fmtHours(totalHours) : '—'}</b>
+          <b>{entries.status === 'loading' ? <LoadingSpinner small /> : entries.status === 'ready' ? fmtHours(totalHours) : 'N/A'}</b>
         </div>
         <div>
           <span>Billed</span>
-          <b>{entries.status === 'ready' ? billed : '—'}</b>
+          <b>{entries.status === 'loading' ? <LoadingSpinner small /> : entries.status === 'ready' ? billed : 'N/A'}</b>
         </div>
         <div>
           <span>Selected date</span>
@@ -314,10 +313,10 @@ export function DailyHoursView({ role, userId }: { role: UserRole; userId: strin
         {selected && (
           <DetailGrid
             items={[
-              ['Operator', selected.operator?.full_name ?? '—'],
-              ['Project', selected.project?.name ?? '—'],
-              ['Customer', selected.customer?.company_name ?? '—'],
-              ['Site location', selected.site_location ?? '—'],
+              ['Operator', selected.operator?.full_name ?? 'N/A'],
+              ['Project', selected.project?.name ?? 'N/A'],
+              ['Customer', selected.customer?.company_name ?? 'N/A'],
+              ['Site location', selected.site_location ?? 'N/A'],
               ['Meter start', meter(selected.hour_meter_start)],
               ['Meter end', meter(selected.hour_meter_end)],
               ['Total hours', fmtHours(selected.total_hours)],
@@ -329,7 +328,7 @@ export function DailyHoursView({ role, userId }: { role: UserRole; userId: strin
                   <StatusBadge tone="blue">Unbilled</StatusBadge>
                 ),
               ],
-              ['Remarks', selected.remarks ?? '—'],
+              ['Remarks', selected.remarks ?? 'N/A'],
             ]}
           />
         )}
@@ -353,7 +352,7 @@ function ExportBar() {
     try {
       ref.current?.showPicker?.()
     } catch {
-      /* showPicker unsupported/blocked — focusing the input still works */
+      /* showPicker unsupported/blocked : focusing the input still works */
     }
   }
 
@@ -384,7 +383,7 @@ function ExportBar() {
       return
     }
 
-    // Section the export by Site Location — one worksheet per site in Excel,
+    // Section the export by Site Location : one worksheet per site in Excel,
     // one labelled block per site in CSV (which has no real sheets).
     const sections = groupBySite(list).map((g) => {
       const { headers, rows } = buildMatrix(g.rows, EXPORT_COLUMNS)
@@ -409,7 +408,7 @@ function ExportBar() {
     <div className="export-bar">
       <div className="export-title">
         <b>Export working hours</b>
-        <span>Choose any date range — independent of the day shown below.</span>
+        <span>Choose any date range : independent of the day shown below.</span>
       </div>
       <div className="range-field">
         <span className="range-label">From</span>

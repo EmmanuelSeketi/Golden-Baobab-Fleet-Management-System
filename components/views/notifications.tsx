@@ -34,7 +34,6 @@ export function NotificationsView() {
   return (
     <div className="page-wrap">
       <PageHeading
-        eyebrow="Governance"
         title="Notifications"
         description="System alerts for reviews, service due, contract expiry and billing events."
         action={

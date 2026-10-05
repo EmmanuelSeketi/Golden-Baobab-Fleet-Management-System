@@ -42,7 +42,7 @@ with actor as (select id from app_user where is_active = true order by created_a
 insert into machine (machine_number, asset_number, machine_type, manufacturer, brand, model, year, current_hour_meter, service_interval_hours, current_status, created_by, updated_by)
 select v.machine_number, v.asset_number, v.machine_type, v.manufacturer, v.brand, v.model, v.year, v.current_hour_meter, v.service_interval_hours, v.current_status::machine_status, actor.id, actor.id
 from (values
-  ('GB-GR-003','AST-003','Grader','Caterpillar','CAT','140K',2021,1842.5,500,'working'),
+  ('GB-GR-003','AST-003','Grader','Caterpillar','CAT','140K',2021,1842.5,500,'on_hire'),
   ('GB-DT-002','AST-002','Dump truck','Volvo','Volvo','A30G',2020,2310.0,500,'on_hire'),
   ('GB-EX-004','AST-004','Excavator','Komatsu','Komatsu','PC210',2022,1298.0,500,'available'),
   ('GB-EX-005','AST-005','Excavator','Caterpillar','CAT','320',2023,742.0,500,'under_maintenance')

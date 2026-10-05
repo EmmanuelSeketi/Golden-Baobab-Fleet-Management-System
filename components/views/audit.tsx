@@ -45,7 +45,6 @@ export function AuditView() {
   return (
     <div className="page-wrap">
       <PageHeading
-        eyebrow="Governance"
         title="Audit Log"
         description="Diff-only trail of changes to business records. Visible to administrators and management."
       />
@@ -114,7 +113,7 @@ function AuditModal({ audit, onClose }: { audit: Audit | null; onClose: () => vo
               ['Performed by', audit.user?.full_name ?? 'System'],
               ['Entity type', titleCase(audit.entity_type)],
               ['Entity ID', <code key="id" className="mono-id">{audit.entity_id}</code>],
-              ['Reason', audit.reason ?? '—'],
+              ['Reason', audit.reason ?? 'N/A'],
             ]}
           />
           <section className="modal-section">
@@ -155,7 +154,7 @@ function AuditModal({ audit, onClose }: { audit: Audit | null; onClose: () => vo
 }
 
 function formatValue(value: unknown): string {
-  if (value == null) return '—'
+  if (value == null) return 'N/A'
   if (typeof value === 'object') return JSON.stringify(value)
   return String(value)
 }

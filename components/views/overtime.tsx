@@ -8,10 +8,10 @@ import { dateTime, money, shortDate, titleCase } from '@/lib/gbi/format'
 import { buildMatrix, exportCsv, exportXlsx, type ExportColumn } from '@/lib/gbi/export'
 import { canManageOvertimeRules, canReviewOvertime, type UserRole } from '@/lib/gbi/roles'
 import { deriveOvertime, pickOvertimeRule, type OvertimeRule, type OvertimeSourceEntry } from '@/lib/gbi/overtime'
-import { DetailGrid, Modal, ModalSection, PageHeading, StatusBadge, ViewState } from '@/components/shared'
+import { DetailGrid, LoadingSpinner, Modal, ModalSection, PageHeading, StatusBadge, ViewState } from '@/components/shared'
 
 // A single overtime line as shown on the page. It is derived live from a daily
-// hour entry — no manual "generate" step and no dependency on rows existing in
+// hour entry : no manual "generate" step and no dependency on rows existing in
 // overtime_entry. A persisted overtime_entry only supplies the reviewed status
 // (and, once recorded, its snapshotted figures).
 type OtRow = {
@@ -147,8 +147,8 @@ export function OvertimeView({ role, userId }: { role: UserRole; userId: string 
         key: e.id,
         persistedId: p?.id ?? null,
         operatorId: e.operator_id,
-        operatorName: e.operator?.full_name ?? '—',
-        machineNumber: e.machine?.machine_number ?? '—',
+        operatorName: e.operator?.full_name ?? 'N/A',
+        machineNumber: e.machine?.machine_number ?? 'N/A',
         entryDate: e.entry_date,
         ruleId: derived.ruleId,
         ruleName: derived.ruleName,
@@ -179,7 +179,6 @@ export function OvertimeView({ role, userId }: { role: UserRole; userId: string 
   return (
     <div className="page-wrap">
       <PageHeading
-        eyebrow="People"
         title="Operator Overtime"
         description="Overtime is derived automatically from daily hours worked beyond standard hours, pending management review."
         action={
@@ -207,20 +206,20 @@ export function OvertimeView({ role, userId }: { role: UserRole; userId: string 
       <div className="hours-summary">
         <div>
           <span>Entries</span>
-          <b>{status === 'ready' ? rows.length : '—'}</b>
+          <b>{status === 'loading' ? <LoadingSpinner small /> : status === 'ready' ? rows.length : 'N/A'}</b>
         </div>
         <div>
           <span>Overtime hours</span>
-          <b>{status === 'ready' ? `${totalHours.toFixed(1)} h` : '—'}</b>
+          <b>{status === 'loading' ? <LoadingSpinner small /> : status === 'ready' ? `${totalHours.toFixed(1)} h` : 'N/A'}</b>
         </div>
         <div>
           <span>Overtime pay</span>
-          <b>{status === 'ready' ? money(totalPay) : '—'}</b>
+          <b>{status === 'loading' ? <LoadingSpinner small /> : status === 'ready' ? money(totalPay) : 'N/A'}</b>
         </div>
         <div>
           <span>Pending review</span>
           <b className={rows.some((r) => !r.reviewed) ? 'danger-text' : ''}>
-            {status === 'ready' ? rows.filter((r) => !r.reviewed).length : '—'}
+            {status === 'loading' ? <LoadingSpinner small /> : status === 'ready' ? rows.filter((r) => !r.reviewed).length : 'N/A'}
           </b>
         </div>
         <div>
@@ -497,7 +496,7 @@ function OvertimeRulesModal({ open, userId, onClose }: { open: boolean; userId: 
                   </span>
                 </div>
                 <div className="stack-meta">
-                  {r.weekday_rate_multiplier ?? '—'}× wk
+                  {r.weekday_rate_multiplier ?? 'N/A'}× wk
                   {r.base_hourly_rate ? ` · ${money(r.base_hourly_rate)}/h` : ''}
                   {!r.effective_to && <StatusBadge tone="green">Active</StatusBadge>}
                 </div>
@@ -699,7 +698,7 @@ function OvertimeExportBar({
     try {
       ref.current?.showPicker?.()
     } catch {
-      /* showPicker unsupported/blocked — focusing the input still works */
+      /* showPicker unsupported/blocked : focusing the input still works */
     }
   }
 
@@ -734,7 +733,7 @@ function OvertimeExportBar({
         <b>Export overtime</b>
         <span>Exports exactly the entries shown for the selected day.</span>
       </div>
-      <div className="range-field">
+      <div className="range-field overtime-day-filter">
         <span className="range-label">Day</span>
         <label className="date-control" onClick={() => openPicker(dateRef)}>
           <CalendarDays size={15} />

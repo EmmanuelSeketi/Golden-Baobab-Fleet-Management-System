@@ -26,7 +26,7 @@ export type Module =
   | 'Machine History'
   | 'Calendar'
   | 'Customers & Contracts'
-  | 'Billing & Invoices'
+  | 'Hiring Quotations'
   | 'Reports'
   | 'Maintenance'
   | 'Repairs'
@@ -48,14 +48,14 @@ export const ROLE_ACCESS_SUMMARY: Record<UserRole, string> = {
   accounts_billing: 'Commercial & billing access',
 }
 
-// Commercial tables (customer/contract/billing/invoice) exclude operations_manager.
+// Commercial tables exclude operations_manager.
 const COMMERCIAL_ROLES: UserRole[] = ['administrator', 'management', 'accounts_billing']
 // audit_log is admin + management only.
 const AUDIT_ROLES: UserRole[] = ['administrator', 'management']
 
 const MODULE_ROLES: Partial<Record<Module, UserRole[]>> = {
   'Customers & Contracts': COMMERCIAL_ROLES,
-  'Billing & Invoices': COMMERCIAL_ROLES,
+  'Hiring Quotations': COMMERCIAL_ROLES,
   'Audit Log': AUDIT_ROLES,
   Settings: ['administrator'],
 }
@@ -73,7 +73,7 @@ export function canManageOps(role: UserRole): boolean {
 }
 
 // Write access to commercial tables (customer, contract, contract_machine,
-// billing_rule, billing_entry, invoice, invoice_adjustment) mirrors the RLS
+// billing_rule, billing_entry, invoices, and quotations) mirrors the RLS
 // insert/update policy: administrator + accounts_billing only. Management has
 // read-only commercial access; operations_manager has none.
 export function canManageCommercial(role: UserRole): boolean {
@@ -82,7 +82,7 @@ export function canManageCommercial(role: UserRole): boolean {
 
 // Projects are operational records (operations logs daily hours against them;
 // commercial only links them to customers for billing). Write access mirrors
-// the RLS insert/update policy for the project table — administrator +
+// the RLS insert/update policy for the project table : administrator +
 // operations_manager only. Management stays read-only; all roles may read.
 export function canManageProjects(role: UserRole): boolean {
   return role === 'administrator' || role === 'operations_manager'

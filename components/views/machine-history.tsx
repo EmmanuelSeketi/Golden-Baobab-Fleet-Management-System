@@ -1,7 +1,6 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import { Clock, Gauge, Hammer, MapPin, Truck, User, Wrench } from 'lucide-react'
 import { useSupabase } from '@/lib/supabase/use-supabase'
 import { useQuery } from '@/lib/gbi/use-query'
 import type { Tone } from '@/lib/gbi/format'
@@ -79,13 +78,6 @@ type TimelineEvent = {
   value?: string
 }
 
-const EVENT_META: Record<EventType, { label: string; icon: React.ElementType; tone: Tone }> = {
-  hours: { label: 'Hours logged', icon: Clock, tone: 'green' },
-  assignment: { label: 'Assignment', icon: MapPin, tone: 'blue' },
-  maintenance: { label: 'Maintenance', icon: Wrench, tone: 'amber' },
-  repair: { label: 'Repair', icon: Hammer, tone: 'red' },
-}
-
 const FILTERS: { key: EventType | 'all'; label: string }[] = [
   { key: 'all', label: 'All activity' },
   { key: 'hours', label: 'Hours' },
@@ -98,6 +90,8 @@ export function MachineHistoryView() {
   const supabase = useSupabase()
   const [machineId, setMachineId] = useState<string>('')
   const [filter, setFilter] = useState<EventType | 'all'>('all')
+  const [page, setPage] = useState(1)
+  const pageSize = 6
 
   const machines = useQuery<MachineOption[]>(
     () =>
@@ -237,6 +231,10 @@ export function MachineHistoryView() {
     () => (filter === 'all' ? events : events.filter((e) => e.type === filter)),
     [events, filter],
   )
+  const pageCount = Math.ceil(visible.length / pageSize)
+  const currentPage = Math.min(page, Math.max(1, pageCount))
+  const pageStart = (currentPage - 1) * pageSize
+  const pagedEvents = visible.slice(pageStart, pageStart + pageSize)
 
   const summary = useMemo(() => {
     const hrs = (hourEntries.data ?? []).reduce((sum, h) => sum + (Number(h.total_hours) || 0), 0)
@@ -246,31 +244,37 @@ export function MachineHistoryView() {
     return { hrs, days, openRepairs, lastService }
   }, [hourEntries.data, repairs.data, maintenance.data])
 
+  const machinePicker = (
+    <div className="mh-picker">
+      <select
+        value={machineId}
+        onChange={(e) => {
+          setMachineId(e.target.value)
+          setPage(1)
+        }}
+        aria-label="Select machine"
+      >
+        <option value="">Select a machine…</option>
+        {(machines.data ?? []).map((m) => (
+          <option key={m.id} value={m.id}>
+            {m.machine_number} · {m.machine_type}
+            {m.model ? ` (${m.model})` : ''}
+          </option>
+        ))}
+      </select>
+    </div>
+  )
+
   return (
     <div className="page-wrap">
       <PageHeading
-        eyebrow="Assets"
         title="Machine History"
-        description="A consolidated timeline for any machine — hours logged, deployments, maintenance and repairs in one place."
+        description="A consolidated timeline for any machine, with hours logged, deployments, maintenance and repairs in one place."
       />
-
-      <div className="filter-row">
-        <div className="mh-picker">
-          <Truck size={15} />
-          <select value={machineId} onChange={(e) => setMachineId(e.target.value)} aria-label="Select machine">
-            <option value="">Select a machine…</option>
-            {(machines.data ?? []).map((m) => (
-              <option key={m.id} value={m.id}>
-                {m.machine_number} — {m.machine_type}
-                {m.model ? ` (${m.model})` : ''}
-              </option>
-            ))}
-          </select>
-        </div>
-      </div>
 
       {!machineId ? (
         <div className="panel">
+          <div className="mh-machine-picker-row">{machinePicker}</div>
           <MiniState
             status={machines.status}
             error={machines.error}
@@ -279,7 +283,6 @@ export function MachineHistoryView() {
           />
           {machines.status === 'ready' && (machines.data ?? []).length > 0 && (
             <div className="mh-empty">
-              <Gauge size={26} />
               <b>Select a machine to view its full history</b>
               <span>Choose from the picker above to see its hours, assignments, maintenance and repairs.</span>
             </div>
@@ -291,7 +294,7 @@ export function MachineHistoryView() {
             <div className="mh-machine-head">
               <div>
                 <div className="mh-machine-name">
-                  <b>{machine.machine_number}</b>
+                  <b className="mono">{machine.machine_number}</b>
                   <StatusBadge tone={machineStatusTone(machine.current_status)}>
                     {titleCase(machine.current_status)}
                   </StatusBadge>
@@ -302,12 +305,12 @@ export function MachineHistoryView() {
                   {machine.project ? ` · ${machine.project.name}` : ''}
                 </span>
               </div>
+              {machinePicker}
             </div>
           )}
 
           <div className="kpi-grid">
             <KpiCard
-              icon={Gauge}
               tone="gold"
               label="Current hour meter"
               value={meter(machine?.current_hour_meter)}
@@ -318,21 +321,18 @@ export function MachineHistoryView() {
               }
             />
             <KpiCard
-              icon={Clock}
               tone="green"
               label="Total hours logged"
               value={fmtHours(summary.hrs)}
               sub={`${summary.days} ${summary.days === 1 ? 'day' : 'days'} recorded`}
             />
             <KpiCard
-              icon={Wrench}
               tone="blue"
               label="Last service"
-              value={summary.lastService ? shortDate(summary.lastService) : '—'}
+              value={summary.lastService ? shortDate(summary.lastService) : 'N/A'}
               sub={`${(maintenance.data ?? []).length} service records`}
             />
             <KpiCard
-              icon={Hammer}
               tone={summary.openRepairs > 0 ? 'red' : 'green'}
               label="Open repairs"
               value={String(summary.openRepairs)}
@@ -347,7 +347,10 @@ export function MachineHistoryView() {
                 <button
                   key={f.key}
                   className={`mh-chip ${filter === f.key ? 'active' : ''}`}
-                  onClick={() => setFilter(f.key)}
+                  onClick={() => {
+                    setFilter(f.key)
+                    setPage(1)
+                  }}
                 >
                   {f.label}
                   <i>{count}</i>
@@ -375,13 +378,9 @@ export function MachineHistoryView() {
               }}
             >
               <ol className="mh-timeline">
-                {visible.map((e) => {
-                  const Icon = EVENT_META[e.type].icon
+                {pagedEvents.map((e) => {
                   return (
                     <li key={e.key} className="mh-event">
-                      <div className={`mh-event-icon tone-${EVENT_META[e.type].tone}`}>
-                        <Icon size={15} />
-                      </div>
                       <div className="mh-event-body">
                         <div className="mh-event-top">
                           <b>{e.title}</b>
@@ -389,10 +388,7 @@ export function MachineHistoryView() {
                         </div>
                         <div className="mh-event-detail">{e.detail}</div>
                         <div className="mh-event-foot">
-                          <span className="mh-event-meta">
-                            <User size={12} />
-                            {e.meta}
-                          </span>
+                          <span className="mh-event-meta">{e.meta}</span>
                           {e.value && <span className="mh-event-value">{e.value}</span>}
                           {e.status && <StatusBadge tone={e.status.tone}>{e.status.label}</StatusBadge>}
                         </div>
@@ -402,6 +398,30 @@ export function MachineHistoryView() {
                 })}
               </ol>
             </ViewState>
+            {visible.length > 0 && (
+              <div className="mh-pagination" aria-label="Machine history pagination">
+                <span>
+                  Showing {pageStart + 1}–{Math.min(pageStart + pageSize, visible.length)} of {visible.length}
+                </span>
+                <div>
+                  <button
+                    className="button button-secondary"
+                    onClick={() => setPage((current) => Math.max(1, current - 1))}
+                    disabled={currentPage <= 1}
+                  >
+                    Previous
+                  </button>
+                  <span>Page {currentPage} of {pageCount}</span>
+                  <button
+                    className="button button-secondary"
+                    onClick={() => setPage((current) => Math.min(pageCount, current + 1))}
+                    disabled={currentPage >= pageCount}
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </>
       )}

@@ -8,7 +8,7 @@ export default async function LoginPage() {
     data: { user },
   } = await supabase.auth.getUser()
 
-  // Already signed in — send them into the workspace.
+  // Already signed in : send them into the workspace.
   if (user) redirect('/')
 
   return <LoginForm />

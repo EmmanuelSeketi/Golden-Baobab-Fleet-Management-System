@@ -8,7 +8,10 @@
  * without requiring the env var itself to be changed.
  */
 export function supabaseUrl(): string {
-  const raw = process.env.NEXT_PUBLIC_SUPABASE_URL!
+  const raw = process.env.NEXT_PUBLIC_SUPABASE_URL
+  if (!raw) {
+    throw new Error('Missing NEXT_PUBLIC_SUPABASE_URL environment variable')
+  }
   try {
     return new URL(raw).origin
   } catch {

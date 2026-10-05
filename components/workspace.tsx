@@ -1,15 +1,15 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   BarChart3,
   Bell,
-  Building2,
   CalendarDays,
   ChevronRight,
   ClipboardCheck,
   Clock,
+  ChevronDown,
   FolderKanban,
   Hammer,
   History,
@@ -17,13 +17,11 @@ import {
   LifeBuoy,
   LogOut,
   Menu,
-  ReceiptText,
+  FileText,
   ScrollText,
   Search,
   Settings,
   Timer,
-  Truck,
-  Users,
   Wrench,
   X,
 } from 'lucide-react'
@@ -57,7 +55,13 @@ import { SettingsView } from '@/components/views/settings'
 import { LangProvider, useLang } from '@/lib/i18n'
 import { Localizer } from '@/components/localizer'
 
-type NavItem = { module: Module; label: string; zh: string; icon: React.ElementType }
+type NavItem = {
+  module: Module
+  label: string
+  zh: string
+  icon?: React.ElementType
+  iconSrc?: string
+}
 type NavGroup = { group: string; zh: string; items: NavItem[] }
 
 const NAV: NavGroup[] = [
@@ -67,11 +71,11 @@ const NAV: NavGroup[] = [
     items: [
       { module: 'Overview', label: 'Dashboard', zh: '仪表板', icon: LayoutDashboard },
       { module: 'Daily Hours', label: 'Daily Working Hours', zh: '每日工时', icon: Clock },
-      { module: 'Fleet', label: 'Fleet Register', zh: '车队登记', icon: Truck },
+      { module: 'Fleet', label: 'Fleet Register', zh: '车队登记', iconSrc: '/icons/fleet.svg' },
       { module: 'Projects', label: 'Projects & Sites', zh: '项目与工地', icon: FolderKanban },
       { module: 'Equipment Lifecycle', label: 'Equipment Lifecycle', zh: '设备生命周期', icon: ClipboardCheck },
       { module: 'Machine History', label: 'Machine History', zh: '机器历史', icon: History },
-      { module: 'Operators', label: 'Operators', zh: '操作员', icon: Users },
+      { module: 'Operators', label: 'Operators', zh: '操作员', iconSrc: '/icons/operator.svg' },
       { module: 'Overtime', label: 'Operator Overtime', zh: '操作员加班', icon: Timer },
     ],
   },
@@ -79,8 +83,8 @@ const NAV: NavGroup[] = [
     group: 'Commercial',
     zh: '商务',
     items: [
-      { module: 'Customers & Contracts', label: 'Customers & Contracts', zh: '客户与合同', icon: Building2 },
-      { module: 'Billing & Invoices', label: 'Billing & Invoices', zh: '账单与发票', icon: ReceiptText },
+      { module: 'Customers & Contracts', label: 'Customers & Contracts', zh: '客户与合同', iconSrc: '/icons/contracts.svg' },
+      { module: 'Hiring Quotations', label: 'Hiring Quotations', zh: '租赁报价', icon: FileText },
       { module: 'Reports', label: 'Reports', zh: '报表', icon: BarChart3 },
     ],
   },
@@ -118,8 +122,17 @@ function WorkspaceInner({ profile, email }: { profile: AppUser; email: string })
   const router = useRouter()
   const [active, setActive] = useState<Module>('Overview')
   const [menuOpen, setMenuOpen] = useState(false)
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(() => new Set())
+  const [topbarScrolled, setTopbarScrolled] = useState(false)
   const { lang, setLang } = useLang()
   const [signingOut, setSigningOut] = useState(false)
+
+  useEffect(() => {
+    const updateScrollState = () => setTopbarScrolled(window.scrollY > 0)
+    updateScrollState()
+    window.addEventListener('scroll', updateScrollState, { passive: true })
+    return () => window.removeEventListener('scroll', updateScrollState)
+  }, [])
 
   // Filter navigation to what this role may actually read (mirrors RLS).
   const groups = useMemo(
@@ -153,11 +166,20 @@ function WorkspaceInner({ profile, email }: { profile: AppUser; email: string })
     setMenuOpen(false)
   }
 
+  function toggleGroup(group: string) {
+    setCollapsedGroups((current) => {
+      const next = new Set(current)
+      if (next.has(group)) next.delete(group)
+      else next.add(group)
+      return next
+    })
+  }
+
   const initials = initialsOf(profile.full_name)
 
   return (
     <div className="app-shell">
-      <aside className={`sidebar ${menuOpen ? 'open' : ''}`}>
+      <aside lang={lang} className={`sidebar ${menuOpen ? 'open' : ''}`}>
         <div className="brand">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
@@ -177,20 +199,41 @@ function WorkspaceInner({ profile, email }: { profile: AppUser; email: string })
         <nav>
           {groups.map((g) => (
             <div className="nav-group" key={g.group}>
-              <small>{lang === 'zh' ? g.zh : g.group}</small>
-              {g.items.map((item) => {
-                const Icon = item.icon
-                return (
-                  <button
-                    key={item.module}
-                    className={`nav-item ${active === item.module ? 'active' : ''}`}
-                    onClick={() => go(item.module)}
-                  >
-                    <Icon size={16} />
-                    {lang === 'zh' ? item.zh : item.label}
-                  </button>
-                )
-              })}
+              <button
+                type="button"
+                className="nav-group-toggle"
+                aria-expanded={!collapsedGroups.has(g.group)}
+                aria-controls={`nav-group-${g.group.toLowerCase()}`}
+                onClick={() => toggleGroup(g.group)}
+              >
+                <span>{lang === 'zh' ? g.zh : g.group}</span>
+                <ChevronDown
+                  size={14}
+                  className={collapsedGroups.has(g.group) ? 'collapsed' : ''}
+                />
+              </button>
+              <div
+                id={`nav-group-${g.group.toLowerCase()}`}
+                hidden={collapsedGroups.has(g.group)}
+              >
+                {g.items.map((item) => {
+                  const Icon = item.icon
+                  return (
+                    <button
+                      key={item.module}
+                      className={`nav-item ${active === item.module ? 'active' : ''}`}
+                      onClick={() => go(item.module)}
+                    >
+                      {item.iconSrc ? (
+                        <img src={item.iconSrc} alt="" width={22} height={22} />
+                      ) : Icon ? (
+                        <Icon size={16} />
+                      ) : null}
+                      {lang === 'zh' ? item.zh : item.label}
+                    </button>
+                  )
+                })}
+              </div>
             </div>
           ))}
         </nav>
@@ -210,7 +253,7 @@ function WorkspaceInner({ profile, email }: { profile: AppUser; email: string })
       {menuOpen && <div className="scrim" onClick={() => setMenuOpen(false)} />}
 
       <div className="main-content">
-        <header className="topbar">
+        <header className={`topbar${topbarScrolled ? ' topbar-scrolled' : ''}`}>
           <button className="menu-button" onClick={() => setMenuOpen(true)} aria-label="Open menu">
             <Menu size={20} />
           </button>
@@ -304,7 +347,7 @@ function ActiveView({
       return <OvertimeView role={role} userId={userId} />
     case 'Customers & Contracts':
       return <ContractsView role={role} userId={userId} />
-    case 'Billing & Invoices':
+    case 'Hiring Quotations':
       return <BillingView role={role} userId={userId} />
     case 'Reports':
       return <ReportsView role={role} />

@@ -81,7 +81,6 @@ export function MaintenanceView({ role, userId }: { role: UserRole; userId: stri
   return (
     <div className="page-wrap">
       <PageHeading
-        eyebrow="Assets"
         title="Maintenance"
         description="Scheduled and completed servicing, with the next service due by hours or date."
         action={
@@ -139,12 +138,12 @@ export function MaintenanceView({ role, userId }: { role: UserRole; userId: stri
                 {rows.map((r) => (
                   <tr key={r.id} className="clickable-row" onClick={() => setSelected(r)}>
                     <td>
-                      <b>{r.machine?.machine_number ?? '—'}</b>
+                      <b className="mono">{r.machine?.machine_number ?? 'N/A'}</b>
                       <div className="muted-cell">{r.machine?.machine_type ?? ''}</div>
                     </td>
                     <td>{shortDate(r.service_date)}</td>
-                    <td>{r.service_type ?? '—'}</td>
-                    <td>{r.mechanic ?? '—'}</td>
+                    <td>{r.service_type ?? 'N/A'}</td>
+                    <td>{r.mechanic ?? 'N/A'}</td>
                     <td>{shortDate(r.next_service_due_date)}</td>
                     <td>
                       <StatusBadge tone={maintenanceStatusTone(r.status)}>{titleCase(r.status)}</StatusBadge>
@@ -208,16 +207,16 @@ export function MaintenanceView({ role, userId }: { role: UserRole; userId: stri
         {selected && (
           <DetailGrid
             items={[
-              ['Machine', selected.machine?.machine_number ?? '—'],
-              ['Machine type', selected.machine?.machine_type ?? '—'],
+              ['Machine', selected.machine?.machine_number ?? 'N/A'],
+              ['Machine type', selected.machine?.machine_type ?? 'N/A'],
               ['Service date', shortDate(selected.service_date)],
-              ['Service type', selected.service_type ?? '—'],
-              ['Mechanic', selected.mechanic ?? '—'],
-              ['Meter at service', selected.hour_meter_at_service ? `${selected.hour_meter_at_service} h` : '—'],
-              ['Next due (hours)', selected.next_service_due_hours ? `${selected.next_service_due_hours} h` : '—'],
+              ['Service type', selected.service_type ?? 'N/A'],
+              ['Mechanic', selected.mechanic ?? 'N/A'],
+              ['Meter at service', selected.hour_meter_at_service ? `${selected.hour_meter_at_service} h` : 'N/A'],
+              ['Next due (hours)', selected.next_service_due_hours ? `${selected.next_service_due_hours} h` : 'N/A'],
               ['Next due (date)', shortDate(selected.next_service_due_date)],
               ['Cost', money(selected.cost)],
-              ['Parts replaced', selected.parts_replaced ?? '—'],
+              ['Parts replaced', selected.parts_replaced ?? 'N/A'],
             ]}
           />
         )}
@@ -375,7 +374,7 @@ function MaintenanceFormModal({
             Machine<span className="req">*</span>
           </label>
           <select id="mt-machine" value={machineId} onChange={(e) => setMachineId(e.target.value)}>
-            <option value="">— Select machine —</option>
+            <option value="">Select machine</option>
             {machines.map((m) => (
               <option key={m.id} value={m.id}>
                 {m.machine_number} · {m.machine_type}

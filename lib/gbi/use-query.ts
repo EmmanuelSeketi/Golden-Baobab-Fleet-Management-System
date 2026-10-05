@@ -15,7 +15,7 @@ export type QueryResult<T> = {
 /**
  * Runs a Supabase query and tracks loading/ready/error. On any query error
  * (including RLS denial) it exposes an error string and never a fabricated
- * or cached mock value — data stays null.
+ * or cached mock value : data stays null.
  */
 export function useQuery<T>(
   run: () => PromiseLike<{ data: T | null; error: unknown }>,

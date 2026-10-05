@@ -13,6 +13,7 @@ type Machine = {
   machine_type: string
   chassis_number: string | null
   current_hour_meter: number | null
+  current_status: string
   assigned_operator_id: string | null
   current_project_id: string | null
   operator: { full_name: string } | null
@@ -22,7 +23,7 @@ type Existing = { id: string; machine_id: string; hour_meter_start: number; hour
 type Draft = { start: string; end: string; remarks: string }
 
 const MACHINE_SELECT =
-  'id,machine_number,machine_type,chassis_number,current_hour_meter,assigned_operator_id,current_project_id,operator:assigned_operator_id(full_name),project:current_project_id(name,site_location,customer_id,customer:customer_id(company_name))'
+  'id,machine_number,machine_type,chassis_number,current_hour_meter,current_status,assigned_operator_id,current_project_id,operator:assigned_operator_id(full_name),project:current_project_id(name,site_location,customer_id,customer:customer_id(company_name))'
 
 // Live total from the current draft figures (blank until both are valid and end >= start).
 function draftTotal(draft: Draft): number | null {
@@ -52,7 +53,12 @@ export function DailyHoursEntry({
 
   const machines = useQuery<Machine[]>(
     () =>
-      supabase.from('machine').select(MACHINE_SELECT).is('deleted_at', null).order('machine_number') as unknown as PromiseLike<{
+      supabase
+        .from('machine')
+        .select(MACHINE_SELECT)
+        .is('deleted_at', null)
+        .eq('current_status', 'on_hire')
+        .order('machine_number') as unknown as PromiseLike<{
         data: Machine[] | null
         error: unknown
       }>,
@@ -121,7 +127,7 @@ export function DailyHoursEntry({
     }
     // Carry the reading forward: the machine's current hour meter becomes today's
     // end reading, so tomorrow's entry starts where today left off. Only ever
-    // advance the meter — never pull it backwards when correcting an old entry.
+    // advance the meter : never pull it backwards when correcting an old entry.
     if (end > (machine.current_hour_meter ?? 0)) {
       await supabase.from('machine').update({ current_hour_meter: end }).eq('id', machine.id)
       machines.reload()
@@ -143,7 +149,7 @@ export function DailyHoursEntry({
       <div className="panel-heading">
         <div>
           <h3>Today&apos;s machine readings</h3>
-          <p>Operations Manager entry. Assignment, project, customer and site are read-only.</p>
+          <p>Only machines marked On hire are listed. Assignment, project, customer and site are read-only.</p>
         </div>
       </div>
       {message && <p className={message.error ? 'form-error' : 'form-success'}>{message.text}</p>}
@@ -164,6 +170,13 @@ export function DailyHoursEntry({
             </tr>
           </thead>
           <tbody>
+            {machines.status === 'ready' && rows.length === 0 && (
+              <tr>
+                <td colSpan={10}>
+                  No machines are currently marked On hire.
+                </td>
+              </tr>
+            )}
             {rows.map(({ machine, old, draft }) => {
               // A saved row is locked until the user explicitly clicks Edit.
               const locked = !!old && !editing[machine.id]
@@ -171,16 +184,16 @@ export function DailyHoursEntry({
               return (
                 <tr key={machine.id}>
                   <td>
-                    <b>{machine.machine_number}</b>
+                    <b className="mono">{machine.machine_number}</b>
                     <div className="muted-cell">{machine.machine_type}</div>
                   </td>
-                  <td>{machine.chassis_number ?? '—'}</td>
-                  <td>{machine.operator?.full_name ?? '—'}</td>
+                  <td className="mono">{machine.chassis_number ?? 'N/A'}</td>
+                  <td>{machine.operator?.full_name ?? 'N/A'}</td>
                   <td>
-                    {machine.project?.name ?? '—'}
+                    {machine.project?.name ?? 'N/A'}
                     <div className="muted-cell">{machine.project?.customer?.company_name ?? 'No customer'}</div>
                   </td>
-                  <td>{machine.project?.site_location ?? '—'}</td>
+                  <td>{machine.project?.site_location ?? 'N/A'}</td>
                   <td>
                     <input
                       className="hours-inline-input"
@@ -206,7 +219,7 @@ export function DailyHoursEntry({
                     />
                   </td>
                   <td>
-                    <b>{total === null ? '—' : fmtHours(total)}</b>
+                    <b>{total === null ? 'N/A' : fmtHours(total)}</b>
                   </td>
                   <td>
                     <input

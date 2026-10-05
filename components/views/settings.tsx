@@ -27,7 +27,6 @@ export function SettingsView({ userId }: { userId: string }) {
   return (
     <div className="page-wrap">
       <PageHeading
-        eyebrow="Governance"
         title="Settings & Backup"
         description="Manage user roles, system configuration and data exports. Administrator access only."
       />
@@ -330,7 +329,7 @@ function SystemPanel({ userId }: { userId: string }) {
 }
 
 function formatValue(v: unknown): string {
-  if (v == null) return '—'
+  if (v == null) return 'N/A'
   if (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean') return String(v)
   return JSON.stringify(v)
 }
@@ -440,6 +439,9 @@ const EXPORT_TABLES = [
   'customer',
   'contract',
   'contract_machine',
+  'project_contract',
+  'hiring_quotation',
+  'hiring_quotation_item',
   'billing_rule',
   'daily_hour_entry',
   'overtime_rule',

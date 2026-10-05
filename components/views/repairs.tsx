@@ -79,7 +79,6 @@ export function RepairsView({ role, userId }: { role: UserRole; userId: string }
   return (
     <div className="page-wrap">
       <PageHeading
-        eyebrow="Assets"
         title="Repairs"
         description="Breakdown and fault records with downtime, parts used and repair status."
         action={
@@ -133,12 +132,12 @@ export function RepairsView({ role, userId }: { role: UserRole; userId: string }
                 {rows.map((r) => (
                   <tr key={r.id} className="clickable-row" onClick={() => setSelected(r)}>
                     <td>
-                      <b>{r.machine?.machine_number ?? '—'}</b>
+                      <b className="mono">{r.machine?.machine_number ?? 'N/A'}</b>
                       <div className="muted-cell">{r.machine?.machine_type ?? ''}</div>
                     </td>
                     <td>{shortDate(r.fault_date)}</td>
                     <td className="truncate-cell">{r.fault_description}</td>
-                    <td>{r.downtime_hours != null ? `${r.downtime_hours} h` : '—'}</td>
+                    <td>{r.downtime_hours != null ? `${r.downtime_hours} h` : 'N/A'}</td>
                     <td>{money(r.cost)}</td>
                     <td>
                       <StatusBadge tone={r.repair_completed ? 'green' : 'amber'}>
@@ -206,13 +205,13 @@ export function RepairsView({ role, userId }: { role: UserRole; userId: string }
         {selected && (
           <DetailGrid
             items={[
-              ['Machine', selected.machine?.machine_number ?? '—'],
-              ['Machine type', selected.machine?.machine_type ?? '—'],
+              ['Machine', selected.machine?.machine_number ?? 'N/A'],
+              ['Machine type', selected.machine?.machine_type ?? 'N/A'],
               ['Fault date', shortDate(selected.fault_date)],
-              ['Mechanic', selected.mechanic ?? '—'],
-              ['Downtime', selected.downtime_hours != null ? `${selected.downtime_hours} h` : '—'],
+              ['Mechanic', selected.mechanic ?? 'N/A'],
+              ['Downtime', selected.downtime_hours != null ? `${selected.downtime_hours} h` : 'N/A'],
               ['Cost', money(selected.cost)],
-              ['Parts used', selected.parts_used ?? '—'],
+              ['Parts used', selected.parts_used ?? 'N/A'],
               ['Fault description', selected.fault_description],
             ]}
           />
@@ -368,7 +367,7 @@ function RepairFormModal({
             Machine<span className="req">*</span>
           </label>
           <select id="rp-machine" value={machineId} onChange={(e) => setMachineId(e.target.value)}>
-            <option value="">— Select machine —</option>
+            <option value="">Select machine</option>
             {machines.map((m) => (
               <option key={m.id} value={m.id}>
                 {m.machine_number} · {m.machine_type}

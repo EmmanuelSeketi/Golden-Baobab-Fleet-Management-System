@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { AlertTriangle, Eye, Pencil, Plus, Trash2 } from 'lucide-react'
+import { AlertTriangle, Eye, MapPin, Pencil, Plus, Trash2 } from 'lucide-react'
 import { useSupabase } from '@/lib/supabase/use-supabase'
 import { useQuery } from '@/lib/gbi/use-query'
 import { machineStatusTone, meter, money, shortDate, titleCase } from '@/lib/gbi/format'
@@ -17,6 +17,7 @@ import {
   StatusBadge,
   ViewState,
 } from '@/components/shared'
+import { FleetMapModal } from '@/components/views/fleet-map-modal'
 
 type Machine = {
   id: string
@@ -46,7 +47,6 @@ const LIST_SELECT =
 
 const MACHINE_STATUSES = [
   'available',
-  'working',
   'on_hire',
   'under_maintenance',
   'under_repair',
@@ -57,6 +57,7 @@ const MACHINE_STATUSES = [
 export function FleetView({ role, userId }: { role: UserRole; userId: string }) {
   const supabase = useSupabase()
   const [query, setQuery] = useState('')
+  const [mapOpen, setMapOpen] = useState(false)
   const [selected, setSelected] = useState<Machine | null>(null)
   const [formTarget, setFormTarget] = useState<Machine | null>(null)
   const [formMode, setFormMode] = useState<'add' | 'edit' | null>(null)
@@ -92,6 +93,16 @@ export function FleetView({ role, userId }: { role: UserRole; userId: string }) 
     if (!deleting) return
     setDeleteBusy(true)
     setDeleteError('')
+    const { error: assignmentError } = await supabase.rpc('set_machine_assignment', {
+      p_machine_id: deleting.id,
+      p_operator_id: null,
+      p_project_id: null,
+    })
+    if (assignmentError) {
+      setDeleteBusy(false)
+      setDeleteError('Could not close this machine’s active assignment. Please try again.')
+      return
+    }
     const { error } = await supabase
       .from('machine')
       .update({ deleted_at: new Date().toISOString(), updated_by: userId })
@@ -113,7 +124,6 @@ export function FleetView({ role, userId }: { role: UserRole; userId: string }) 
   return (
     <div className="page-wrap">
       <PageHeading
-        eyebrow="Assets"
         title="Fleet Register"
         description="Every machine with its live hour meter, current status, operator and deployment."
         action={
@@ -141,6 +151,10 @@ export function FleetView({ role, userId }: { role: UserRole; userId: string }) 
             onChange={(e) => setQuery(e.target.value)}
           />
         </div>
+        <button className="button button-secondary" onClick={() => setMapOpen(true)}>
+          <MapPin size={15} />
+          Fleet Map
+        </button>
       </div>
 
       <div className="panel">
@@ -169,13 +183,13 @@ export function FleetView({ role, userId }: { role: UserRole; userId: string }) 
                 {rows.map((m) => (
                   <tr key={m.id} className="clickable-row" onClick={() => setSelected(m)}>
                     <td>
-                      <b>{m.machine_number}</b>
+                      <b className="mono">{m.machine_number}</b>
                       <div className="muted-cell">{[m.manufacturer, m.model].filter(Boolean).join(' ')}</div>
                     </td>
                     <td>{m.machine_type}</td>
-                    <td>{meter(m.current_hour_meter)}</td>
-                    <td>{m.operator?.full_name ?? '—'}</td>
-                    <td>{m.project?.name ?? '—'}</td>
+                    <td className="mono num">{meter(m.current_hour_meter)}</td>
+                    <td>{m.operator?.full_name ?? 'N/A'}</td>
+                    <td>{m.project?.name ?? 'N/A'}</td>
                     <td>
                       <StatusBadge tone={machineStatusTone(m.current_status)}>
                         {titleCase(m.current_status)}
@@ -214,6 +228,12 @@ export function FleetView({ role, userId }: { role: UserRole; userId: string }) 
           </div>
         </ViewState>
       </div>
+
+      <FleetMapModal
+        machines={machines.data ?? []}
+        open={mapOpen}
+        onClose={() => setMapOpen(false)}
+      />
 
       <MachineModal
         machine={formMode ? null : selected}
@@ -357,7 +377,7 @@ function MachineModal({
         : supabase.rpc('resolve_active_contract_machine', { p_machine_id: machine.id, p_event_date: new Date().toISOString().slice(0, 10) }).then(async ({ data, error }) => {
             // The resolver raises for the ordinary cases (no active coverage,
             // multiple coverages, or a role without coverage access). Those are
-            // not failures to show the user — the machine simply has no active
+            // not failures to show the user : the machine simply has no active
             // contract coverage to attach lifecycle events to, so show empty.
             if (error || !data) return { data: [], error: null }
             return supabase.from('equipment_lifecycle_event_record').select('id,event_type,event_date,operating_hours,mileage,notes').eq('contract_machine_id', data).order('event_date')
@@ -398,18 +418,18 @@ function MachineModal({
         <>
           <DetailGrid
             items={[
-              ['Asset number', machine.asset_number ?? '—'],
-              ['Registration', machine.registration_number ?? '—'],
-              ['Chassis number', machine.chassis_number ?? '—'],
-              ['Engine number', machine.engine_number ?? '—'],
-              ['Manufacturer', machine.manufacturer ?? '—'],
-              ['Brand / model', [machine.brand, machine.model].filter(Boolean).join(' ') || '—'],
-              ['Year', machine.year ?? '—'],
+              ['Asset number', machine.asset_number ?? 'N/A'],
+              ['Registration', machine.registration_number ?? 'N/A'],
+              ['Chassis number', machine.chassis_number ?? 'N/A'],
+              ['Engine number', machine.engine_number ?? 'N/A'],
+              ['Manufacturer', machine.manufacturer ?? 'N/A'],
+              ['Brand / model', [machine.brand, machine.model].filter(Boolean).join(' ') || 'N/A'],
+              ['Year', machine.year ?? 'N/A'],
               ['Hour meter', meter(machine.current_hour_meter)],
-              ['Service interval', machine.service_interval_hours ? `${machine.service_interval_hours} h` : '—'],
-              ['Current operator', machine.operator?.full_name ?? '—'],
-              ['Current project', machine.project?.name ?? '—'],
-              ['Site', machine.project?.site_location ?? '—'],
+              ['Service interval', machine.service_interval_hours ? `${machine.service_interval_hours} h` : 'N/A'],
+              ['Current operator', machine.operator?.full_name ?? 'N/A'],
+              ['Current project', machine.project?.name ?? 'N/A'],
+              ['Site', machine.project?.site_location ?? 'N/A'],
               ['Purchase date', shortDate(machine.purchase_date)],
               ['Purchase price', money(machine.purchase_price)],
             ]}
@@ -430,7 +450,7 @@ function MachineModal({
           </ModalSection>
 
           <ModalSection title="Equipment lifecycle" count={lifecycle.data?.length}>
-            <MiniState status={lifecycle.status} error={lifecycle.error} isEmpty={(lifecycle.data ?? []).length === 0} emptyText="No lifecycle events — this machine has no active contract coverage." />
+            <MiniState status={lifecycle.status} error={lifecycle.error} isEmpty={(lifecycle.data ?? []).length === 0} emptyText="No lifecycle events : this machine has no active contract coverage." />
             {(lifecycle.data ?? []).map((event) => (
               <div className="stack-row" key={event.id}>
                 <div><b>{titleCase(event.event_type)}</b><span>{shortDate(event.event_date)} · {event.operating_hours != null ? `${event.operating_hours} h` : ''}{event.mileage != null ? ` · ${event.mileage} km` : ''}</span></div>
@@ -623,11 +643,43 @@ function MachineFormModal({
       current_project_id: text('current_project_id'),
     }
 
+    const {
+      assigned_operator_id: _assignedOperatorId,
+      current_project_id: _currentProjectId,
+      ...machineFields
+    } = payload
     setSaving(true)
-    const { error } =
-      mode === 'edit' && machine
-        ? await supabase.from('machine').update({ ...payload, updated_by: userId }).eq('id', machine.id)
-        : await supabase.from('machine').insert({ ...payload, created_by: userId })
+    let machineId = machine?.id ?? ''
+    let error: unknown = null
+    if (mode === 'edit' && machine) {
+      const { error: updateError } = await supabase
+        .from('machine')
+        .update({ ...machineFields, updated_by: userId })
+        .eq('id', machine.id)
+      error = updateError
+    } else {
+      const { data, error: insertError } = await supabase
+        .from('machine')
+        .insert({
+          ...machineFields,
+          assigned_operator_id: null,
+          current_project_id: null,
+          created_by: userId,
+        })
+        .select('id')
+        .single()
+      error = insertError
+      machineId = data?.id ?? ''
+    }
+
+    if (!error && machineId) {
+      const { error: assignmentError } = await supabase.rpc('set_machine_assignment', {
+        p_machine_id: machineId,
+        p_operator_id: payload.assigned_operator_id,
+        p_project_id: payload.current_project_id,
+      })
+      error = assignmentError
+    }
     setSaving(false)
 
     if (error) {
@@ -762,7 +814,7 @@ function MachineFormModal({
             value={form.assigned_operator_id ?? ''}
             onChange={(e) => set('assigned_operator_id', e.target.value)}
           >
-            <option value="">— Unassigned —</option>
+            <option value="">Unassigned</option>
             {opts.map((o) => (
               <option key={o.id} value={o.id}>
                 {o.label}
@@ -778,7 +830,7 @@ function MachineFormModal({
             value={form.current_project_id ?? ''}
             onChange={(e) => set('current_project_id', e.target.value)}
           >
-            <option value="">— None —</option>
+            <option value="">None</option>
             {projOpts.map((p) => (
               <option key={p.id} value={p.id}>
                 {p.label}

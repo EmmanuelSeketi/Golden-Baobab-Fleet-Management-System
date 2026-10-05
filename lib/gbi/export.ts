@@ -1,5 +1,5 @@
 // Client-side export helpers. Data is fetched through the normal Supabase
-// client, so RLS applies exactly as it does everywhere else — an export only
+// client, so RLS applies exactly as it does everywhere else : an export only
 // ever contains the rows the signed-in user's role is allowed to read.
 
 export type ExportColumn<T> = {
@@ -58,7 +58,7 @@ export async function exportXlsx(
   )
 }
 
-// A named block of rows sharing the same headers — one per Excel worksheet, or
+// A named block of rows sharing the same headers : one per Excel worksheet, or
 // one per labelled CSV section.
 export type ExportSection = {
   name: string
@@ -81,7 +81,7 @@ function sanitizeSheetName(name: string, used: Set<string>): string {
   return candidate
 }
 
-// Multi-sheet workbook — each section becomes its own worksheet.
+// Multi-sheet workbook : each section becomes its own worksheet.
 export async function exportXlsxSheets(filename: string, sections: ExportSection[]) {
   const XLSX = await import('xlsx')
   const workbook = XLSX.utils.book_new()
@@ -103,7 +103,7 @@ export async function exportXlsxSheets(filename: string, sections: ExportSection
 }
 
 // CSV has no concept of sheets, so each section is written as a labelled block
-// separated by a blank line — the closest single-file equivalent.
+// separated by a blank line : the closest single-file equivalent.
 export function exportCsvSections(filename: string, sections: ExportSection[]) {
   const escape = (value: string | number) => {
     const s = String(value)

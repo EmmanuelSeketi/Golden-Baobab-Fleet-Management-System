@@ -149,7 +149,7 @@ export function ContractDocModal({
                 <input inputMode="numeric" placeholder="1" value={row.qty} onChange={(e) => patchEquip(i, 'qty', e.target.value)} />
               </label>
               <label className="field">
-                <span>Rate — USD / month (excl. VAT)</span>
+                <span>Rate: USD / month (excl. VAT)</span>
                 <input inputMode="decimal" placeholder="0.00" value={row.amount} onChange={(e) => patchEquip(i, 'amount', e.target.value)} />
               </label>
               <label className="field">
@@ -194,7 +194,7 @@ export function ContractDocModal({
                 <input inputMode="numeric" placeholder="1" value={row.qty} onChange={(e) => patchTransport(i, 'qty', e.target.value)} />
               </label>
               <label className="field">
-                <span>Amount — ZMW (excl. VAT)</span>
+                <span>Amount: ZMW (excl. VAT)</span>
                 <input inputMode="decimal" placeholder="0.00" value={row.amount} onChange={(e) => patchTransport(i, 'amount', e.target.value)} />
               </label>
               <label className="field">

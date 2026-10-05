@@ -1,6 +1,6 @@
 // Shared formatting + status mapping so every view renders live values the
-// same way. No fallback/mock values live here — helpers return explicit
-// placeholders ("—") for genuinely missing data, never invented numbers.
+// same way. No fallback/mock values live here : helpers return explicit
+// placeholders ("N/A") for genuinely missing data, never invented numbers.
 
 export type Tone = 'green' | 'amber' | 'red' | 'blue' | 'neutral'
 
@@ -9,7 +9,7 @@ export function friendlyError(error: unknown): string {
     typeof error === 'object' && error && 'message' in error
       ? String((error as { message: unknown }).message)
       : ''
-  // RLS denials surface as permission errors — tell the user it is access,
+  // RLS denials surface as permission errors : tell the user it is access,
   // not a fabricated success.
   if (/permission|rls|policy|denied/i.test(message)) {
     return 'You do not have access to this data, or your session has expired.'
@@ -24,7 +24,7 @@ const ZMW = new Intl.NumberFormat('en-ZM', {
 })
 
 export function money(value: number | null | undefined, currency = 'ZMW'): string {
-  if (value == null || Number.isNaN(Number(value))) return '—'
+  if (value == null || Number.isNaN(Number(value))) return 'N/A'
   if (currency === 'ZMW') return ZMW.format(Number(value))
   return new Intl.NumberFormat('en-ZM', {
     style: 'currency',
@@ -34,31 +34,31 @@ export function money(value: number | null | undefined, currency = 'ZMW'): strin
 }
 
 export function hours(value: number | null | undefined): string {
-  if (value == null || Number.isNaN(Number(value))) return '—'
+  if (value == null || Number.isNaN(Number(value))) return 'N/A'
   return `${Number(value).toLocaleString('en-ZM', { maximumFractionDigits: 1 })} h`
 }
 
 export function meter(value: number | null | undefined): string {
-  if (value == null || Number.isNaN(Number(value))) return '—'
+  if (value == null || Number.isNaN(Number(value))) return 'N/A'
   return `${Number(value).toLocaleString('en-ZM', { maximumFractionDigits: 1 })} h`
 }
 
 export function shortDate(value: string | null | undefined): string {
-  if (!value) return '—'
-  const d = new Date(value)
-  if (Number.isNaN(d.getTime())) return '—'
-  return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+  if (!value) return 'N/A'
+  const d = /^\d{4}-\d{2}-\d{2}$/.test(value) ? new Date(`${value}T00:00:00`) : new Date(value)
+  if (Number.isNaN(d.getTime())) return 'N/A'
+  return new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }).format(d)
 }
 
 export function dateTime(value: string | null | undefined): string {
-  if (!value) return '—'
-  const d = new Date(value)
-  if (Number.isNaN(d.getTime())) return '—'
-  return `${d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })} · ${d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}`
+  if (!value) return 'N/A'
+  const d = /^\d{4}-\d{2}-\d{2}$/.test(value) ? new Date(`${value}T00:00:00`) : new Date(value)
+  if (Number.isNaN(d.getTime())) return 'N/A'
+  return `${new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }).format(d)} · ${d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}`
 }
 
 export function titleCase(value: string | null | undefined): string {
-  if (!value) return '—'
+  if (!value) return 'N/A'
   return value
     .replace(/_/g, ' ')
     .replace(/\b\w/g, (c) => c.toUpperCase())

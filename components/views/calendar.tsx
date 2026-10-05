@@ -136,7 +136,7 @@ export function CalendarView() {
           key: `s-${s.id}`,
           type: 'service',
           date: s.next_service_due_date,
-          machine: s.machine?.machine_number ?? '—',
+          machine: s.machine?.machine_number ?? 'N/A',
           title: s.service_type ? `${s.service_type} due` : 'Service due',
           tone: 'amber',
         })
@@ -148,7 +148,7 @@ export function CalendarView() {
           key: `r-${r.id}`,
           type: 'repair',
           date: r.fault_date,
-          machine: r.machine?.machine_number ?? '—',
+          machine: r.machine?.machine_number ?? 'N/A',
           title: r.fault_description,
           tone: r.repair_completed ? 'green' : 'red',
         })
@@ -160,7 +160,7 @@ export function CalendarView() {
           key: `a-${a.id}`,
           type: 'assignment',
           date: a.start_date,
-          machine: a.machine?.machine_number ?? '—',
+          machine: a.machine?.machine_number ?? 'N/A',
           title: a.project?.name ? `Deployed · ${a.project.name}` : 'Deployment',
           tone: 'blue',
         })
@@ -203,7 +203,6 @@ export function CalendarView() {
   return (
     <div className="page-wrap">
       <PageHeading
-        eyebrow="Operations"
         title="Calendar"
         description="Scheduled services, logged repairs and machine deployments across the fleet, by month."
       />

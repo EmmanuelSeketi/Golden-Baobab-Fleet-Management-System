@@ -14,10 +14,11 @@
 -- INSERT ORDER (each block only runs once its dependencies exist above it):
 --   1. machine_assignment          (machine + operator + project)
 --   2. contract_machine            (contract + machine)
---   3. billing_rule  GBI-2025-002  (contract)
---   4. daily_hour_entry            (machine + operator + customer + project)
---   5. overtime_rule / overtime_entry   (overtime_entry derives from #4)
---   6. billing_entry               (derives from #4 via contract_machine + billing_rule)
+--   3. project_contract            (project + contract)
+--   4. billing_rule  GBI-2025-002  (contract)
+--   5. daily_hour_entry            (machine + operator + customer + project)
+--   6. overtime_rule / overtime_entry   (overtime_entry derives from #5)
+--   7. billing_entry               (derives from #5 via contract coverage + rules)
 --   7. invoice                     (groups existing billing_entry rows from #6)
 --   8. repair_record               (machine)
 --
@@ -81,7 +82,26 @@ where not exists (
 );
 
 -- ----------------------------------------------------------------------------
--- 3. BILLING RULE for GBI-2025-002  (base seed only covers GBI-2025-001)
+-- 3. PROJECT ↔ CONTRACT  (a project may have multiple contracts)
+--    Depends on: project, contract.
+-- ----------------------------------------------------------------------------
+insert into project_contract (project_id, contract_id, effective_from, effective_to)
+select p.id, c.id, v.effective_from::date, v.effective_to::date
+from (values
+  ('Mokopane Solar Farm','GBI-2025-001','2025-01-06','2025-12-31'),
+  ('Limpopo Aggregates','GBI-2025-002','2025-02-01','2025-11-30')
+) as v(project_name, contract_number, effective_from, effective_to)
+join project p on p.name = v.project_name
+join contract c on c.contract_number = v.contract_number
+where not exists (
+  select 1 from project_contract pc
+  where pc.project_id = p.id
+    and pc.contract_id = c.id
+    and pc.effective_from = v.effective_from::date
+);
+
+-- ----------------------------------------------------------------------------
+-- 4. BILLING RULE for GBI-2025-002  (base seed only covers GBI-2025-001)
 --    Depends on: contract.
 -- ----------------------------------------------------------------------------
 with actor as (select id from app_user where is_active order by created_at limit 1)
@@ -101,7 +121,7 @@ where c.contract_number = 'GBI-2025-002'
   and not exists (select 1 from billing_rule b where b.contract_id = c.id);
 
 -- ----------------------------------------------------------------------------
--- 4. DAILY WORKING HOURS  (last 30 days per machine)
+-- 5. DAILY WORKING HOURS  (last 30 days per machine)
 --    Depends on: machine, operator, customer, project. The customer/project
 --    each entry belongs to is resolved from the contract_machine mapping (#2)
 --    joined back to the machine's contract → customer.

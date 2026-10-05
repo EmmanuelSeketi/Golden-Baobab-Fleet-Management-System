@@ -97,10 +97,11 @@ declare
   t text;
 begin
   foreach t in array array[
-    'machine', 'operator', 'project', 'machine_assignment',
+    'machine', 'operator', 'project', 'project_contract', 'machine_assignment',
     'customer', 'contract', 'contract_machine', 'billing_rule',
     'daily_hour_entry', 'overtime_rule', 'overtime_entry',
     'invoice', 'invoice_adjustment', 'billing_entry',
+    'hiring_quotation', 'hiring_quotation_item',
     'maintenance_record', 'repair_record', 'app_user'
   ]
   loop

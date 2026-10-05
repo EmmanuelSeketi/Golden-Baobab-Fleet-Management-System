@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { AlertTriangle, Building2, Download, Eye, Pencil, Plus, ScrollText } from 'lucide-react'
+import { AlertTriangle, Download, Eye, Pencil, Plus } from 'lucide-react'
 import { useSupabase } from '@/lib/supabase/use-supabase'
 import { useQuery } from '@/lib/gbi/use-query'
 import { contractStatusTone, invoiceStatusTone, money, shortDate, titleCase } from '@/lib/gbi/format'
@@ -124,7 +124,6 @@ export function ContractsView({ role, userId }: { role: UserRole; userId: string
   return (
     <div className="page-wrap">
       <PageHeading
-        eyebrow="Commercial"
         title="Customers & Contracts"
         description="Signed agreements, the machines they cover and the effective billing rules per contract."
         action={
@@ -154,11 +153,9 @@ export function ContractsView({ role, userId }: { role: UserRole; userId: string
       <div className="filter-row">
         <div className="seg-tabs">
           <button className={tab === 'contracts' ? 'active' : ''} onClick={() => setTab('contracts')}>
-            <ScrollText size={14} />
             Contracts
           </button>
           <button className={tab === 'customers' ? 'active' : ''} onClick={() => setTab('customers')}>
-            <Building2 size={14} />
             Customers
           </button>
         </div>
@@ -201,7 +198,7 @@ export function ContractsView({ role, userId }: { role: UserRole; userId: string
                         <b>{c.contract_number}</b>
                         <div className="muted-cell">{titleCase(c.billing_frequency)}</div>
                       </td>
-                      <td>{c.customer?.company_name ?? '—'}</td>
+                      <td>{c.customer?.company_name ?? 'N/A'}</td>
                       <td>
                         {shortDate(c.start_date)} → {c.end_date ? shortDate(c.end_date) : 'open'}
                       </td>
@@ -263,8 +260,8 @@ export function ContractsView({ role, userId }: { role: UserRole; userId: string
                         <b>{c.company_name}</b>
                         <div className="muted-cell">{c.email ?? ''}</div>
                       </td>
-                      <td>{c.customer_code ?? '—'}</td>
-                      <td>{c.contact_name ?? '—'}</td>
+                      <td>{c.customer_code ?? 'N/A'}</td>
+                      <td>{c.contact_name ?? 'N/A'}</td>
                       <td>{c.currency}</td>
                       <td>{c.contract?.[0]?.count ?? 0}</td>
                       <td className="col-actions" onClick={(e) => e.stopPropagation()}>
@@ -353,7 +350,7 @@ export function ContractsView({ role, userId }: { role: UserRole; userId: string
 }
 
 // ---------------------------------------------------------------------------
-// Contract detail modal — with inline management of billing rules & machines
+// Contract detail modal : with inline management of billing rules & machines
 // ---------------------------------------------------------------------------
 
 type RuleRow = {
@@ -377,6 +374,13 @@ type CoveredRow = {
   deployment_end: string | null
   machine_id: string
   machine: { machine_number: string; machine_type: string } | null
+}
+type ProjectContractRow = {
+  id: string
+  project_id: string
+  effective_from: string
+  effective_to: string | null
+  project: { name: string; site_location: string | null } | null
 }
 type InvoiceRow = {
   id: string
@@ -405,7 +409,9 @@ function ContractModal({
   const currency = contract?.customer?.currency ?? 'ZMW'
   const [ruleForm, setRuleForm] = useState(false)
   const [machineForm, setMachineForm] = useState(false)
+  const [projectForm, setProjectForm] = useState(false)
   const [endDeploy, setEndDeploy] = useState<CoveredRow | null>(null)
+  const [endProjectLink, setEndProjectLink] = useState<ProjectContractRow | null>(null)
 
   const rules = useQuery<RuleRow[]>(
     () =>
@@ -437,6 +443,20 @@ function ContractModal({
           }>),
     [contract?.id],
   )
+  const projects = useQuery<ProjectContractRow[]>(
+    () =>
+      !contract
+        ? Promise.resolve({ data: [], error: null })
+        : (supabase
+            .from('project_contract')
+            .select('id,project_id,effective_from,effective_to,project:project_id(name,site_location)')
+            .eq('contract_id', contract.id)
+            .order('effective_from', { ascending: false }) as unknown as PromiseLike<{
+            data: ProjectContractRow[] | null
+            error: unknown
+          }>),
+    [contract?.id],
+  )
   const invoices = useQuery<InvoiceRow[]>(
     () =>
       !contract
@@ -460,6 +480,17 @@ function ContractModal({
       .eq('id', endDeploy.id)
     setEndDeploy(null)
     covered.reload()
+  }
+
+  async function endProjectRelationship() {
+    if (!endProjectLink) return
+    const { error } = await supabase
+      .from('project_contract')
+      .update({ effective_to: new Date().toISOString().slice(0, 10) })
+      .eq('id', endProjectLink.id)
+    if (error) return
+    setEndProjectLink(null)
+    projects.reload()
   }
 
   return (
@@ -494,11 +525,11 @@ function ContractModal({
           <>
             <DetailGrid
               items={[
-                ['Customer', contract.customer?.company_name ?? '—'],
-                ['Customer code', contract.customer?.customer_code ?? '—'],
-                ['Contact', contract.customer?.contact_name ?? '—'],
-                ['Email', contract.customer?.email ?? '—'],
-                ['Phone', contract.customer?.phone ?? '—'],
+                ['Customer', contract.customer?.company_name ?? 'N/A'],
+                ['Customer code', contract.customer?.customer_code ?? 'N/A'],
+                ['Contact', contract.customer?.contact_name ?? 'N/A'],
+                ['Email', contract.customer?.email ?? 'N/A'],
+                ['Phone', contract.customer?.phone ?? 'N/A'],
                 ['Currency', currency],
                 ['Start date', shortDate(contract.start_date)],
                 ['End date', contract.end_date ? shortDate(contract.end_date) : 'Open-ended'],
@@ -542,6 +573,41 @@ function ContractModal({
             </ModalSection>
 
             <ModalSection
+              title="Linked projects"
+              count={projects.data?.length}
+              action={
+                canManage ? (
+                  <button className="mini-add" onClick={() => setProjectForm(true)}>
+                    <Plus size={13} /> Add project
+                  </button>
+                ) : undefined
+              }
+            >
+              <MiniState
+                status={projects.status}
+                error={projects.error}
+                isEmpty={(projects.data ?? []).length === 0}
+                emptyText="No projects linked to this contract."
+              />
+              {(projects.data ?? []).map((link) => (
+                <div className="stack-row" key={link.id}>
+                  <div>
+                    <b>{link.project?.name ?? 'N/A'}</b>
+                    <span>{link.project?.site_location ?? 'No site location'}</span>
+                  </div>
+                  <div className="stack-meta">
+                    {shortDate(link.effective_from)} → {link.effective_to ? shortDate(link.effective_to) : 'current'}
+                    {canManage && !link.effective_to && (
+                      <button className="mini-link-danger" onClick={() => setEndProjectLink(link)}>
+                        End
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </ModalSection>
+
+            <ModalSection
               title="Covered machines"
               count={covered.data?.length}
               action={
@@ -561,7 +627,7 @@ function ContractModal({
               {(covered.data ?? []).map((c) => (
                 <div className="stack-row" key={c.id}>
                   <div>
-                    <b>{c.machine?.machine_number ?? '—'}</b>
+                    <b className="mono">{c.machine?.machine_number ?? 'N/A'}</b>
                     <span>{c.machine?.machine_type ?? ''}</span>
                   </div>
                   <div className="stack-meta">
@@ -599,6 +665,20 @@ function ContractModal({
           </>
         )}
       </Modal>
+
+      {contract && canManage && (
+        <ProjectContractFormModal
+          open={projectForm}
+          contractId={contract.id}
+          customerId={contract.customer_id}
+          userId={userId}
+          onClose={() => setProjectForm(false)}
+          onSaved={() => {
+            setProjectForm(false)
+            projects.reload()
+          }}
+        />
+      )}
 
       {contract && canManage && (
         <BillingRuleFormModal
@@ -639,6 +719,19 @@ function ContractModal({
           <>
             <b>{endDeploy?.machine?.machine_number}</b> will be marked as no longer deployed on this contract as of
             today. The historical deployment record is preserved.
+          </>
+        }
+      />
+      <ConfirmDialog
+        open={endProjectLink !== null}
+        title="End project relationship?"
+        confirmLabel="End relationship"
+        onCancel={() => setEndProjectLink(null)}
+        onConfirm={endProjectRelationship}
+        message={
+          <>
+            <b>{endProjectLink?.project?.name}</b> will no longer be linked to this contract after today. Its
+            historical relationship is preserved.
           </>
         }
       />
@@ -686,13 +779,13 @@ function CustomerDetailModal({
         <DetailGrid
           items={[
             ['Company', customer.company_name],
-            ['Customer code', customer.customer_code ?? '—'],
-            ['Contact name', customer.contact_name ?? '—'],
-            ['Email', customer.email ?? '—'],
-            ['Phone', customer.phone ?? '—'],
+            ['Customer code', customer.customer_code ?? 'N/A'],
+            ['Contact name', customer.contact_name ?? 'N/A'],
+            ['Email', customer.email ?? 'N/A'],
+            ['Phone', customer.phone ?? 'N/A'],
             ['Currency', customer.currency],
-            ['Tax / VAT number', customer.tax_vat_number ?? '—'],
-            ['Billing address', customer.billing_address ?? '—'],
+            ['Tax / VAT number', customer.tax_vat_number ?? 'N/A'],
+            ['Billing address', customer.billing_address ?? 'N/A'],
           ]}
         />
       )}
@@ -835,7 +928,7 @@ function ContractFormModal({
             Customer<span className="req">*</span>
           </label>
           <select id="c-customer" value={form.customer_id ?? ''} onChange={(e) => set('customer_id', e.target.value)}>
-            <option value="">— Select customer —</option>
+            <option value="">Select customer</option>
             {customers.map((c) => (
               <option key={c.id} value={c.id}>
                 {c.company_name}
@@ -1263,6 +1356,143 @@ function BillingRuleFormModal({
 
 type MachinePick = { id: string; machine_number: string; machine_type: string }
 
+type ProjectPick = { id: string; name: string; site_location: string | null }
+
+function ProjectContractFormModal({
+  open,
+  contractId,
+  customerId,
+  userId,
+  onClose,
+  onSaved,
+}: {
+  open: boolean
+  contractId: string
+  customerId: string
+  userId: string
+  onClose: () => void
+  onSaved: () => void
+}) {
+  const supabase = useSupabase()
+  const [projectId, setProjectId] = useState('')
+  const [effectiveFrom, setEffectiveFrom] = useState('')
+  const [effectiveTo, setEffectiveTo] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+
+  const projects = useQuery<ProjectPick[]>(
+    () =>
+      !open
+        ? Promise.resolve({ data: [], error: null })
+        : (supabase
+            .from('project')
+            .select('id,name,site_location')
+            .or(`customer_id.is.null,customer_id.eq.${customerId}`)
+            .order('name') as unknown as PromiseLike<{ data: ProjectPick[] | null; error: unknown }>),
+    [open, customerId],
+  )
+
+  useEffect(() => {
+    if (!open) return
+    setProjectId('')
+    setEffectiveFrom(new Date().toISOString().slice(0, 10))
+    setEffectiveTo('')
+    setError('')
+  }, [open])
+
+  async function submit() {
+    if (!projectId) return setError('Select a project.')
+    if (!effectiveFrom) return setError('The effective-from date is required.')
+    if (effectiveTo && effectiveTo < effectiveFrom)
+      return setError('The effective-to date must be on or after the start date.')
+
+    setSaving(true)
+    setError('')
+    const { error: insertError } = await supabase.from('project_contract').insert({
+      project_id: projectId,
+      contract_id: contractId,
+      effective_from: effectiveFrom,
+      effective_to: effectiveTo || null,
+      created_by: userId,
+    })
+    setSaving(false)
+
+    if (insertError) {
+      if ((insertError as { code?: string }).code === '23505') {
+        setError('This project-contract relationship already exists for that start date.')
+      } else {
+        setError('Could not link this project to the contract. Check that both belong to the same customer.')
+      }
+      return
+    }
+    onSaved()
+  }
+
+  return (
+    <Modal
+      open={open}
+      onClose={saving ? () => {} : onClose}
+      eyebrow="Project contract"
+      title="Link project to contract"
+      subtitle="A project may be linked to multiple contracts, with each relationship effective-dated."
+      footer={
+        <div className="footer-actions">
+          <button className="button button-secondary" onClick={onClose} disabled={saving}>
+            Cancel
+          </button>
+          <button className="button button-primary" onClick={submit} disabled={saving}>
+            {saving ? 'Saving…' : 'Link project'}
+          </button>
+        </div>
+      }
+    >
+      <div className="form-grid">
+        {error && (
+          <div className="form-error">
+            <AlertTriangle size={15} />
+            {error}
+          </div>
+        )}
+        <div className="form-field full">
+          <label htmlFor="pc-project">Project<span className="req">*</span></label>
+          <select
+            id="pc-project"
+            value={projectId}
+            onChange={(event) => setProjectId(event.target.value)}
+            disabled={projects.status !== 'ready'}
+          >
+            <option value="">Select project</option>
+            {(projects.data ?? []).map((project) => (
+              <option key={project.id} value={project.id}>
+                {project.name}{project.site_location ? ` · ${project.site_location}` : ''}
+              </option>
+            ))}
+          </select>
+          {projects.status === 'ready' && (projects.data ?? []).length === 0 && (
+            <span className="field-hint">No projects for this contract’s customer. Create or link a project first.</span>
+          )}
+          {projects.status === 'error' && (
+            <span className="field-error">Could not load customer projects. Close and try again.</span>
+          )}
+        </div>
+        <Field
+          label="Effective from"
+          type="date"
+          required
+          value={effectiveFrom}
+          onChange={setEffectiveFrom}
+        />
+        <Field
+          label="Effective to (optional)"
+          type="date"
+          value={effectiveTo}
+          onChange={setEffectiveTo}
+        />
+      </div>
+    </Modal>
+  )
+}
+
 function AddMachineModal({
   open,
   contractId,
@@ -1373,10 +1603,10 @@ function AddMachineModal({
             Machine<span className="req">*</span>
           </label>
           <select id="cm-machine" value={form.machine_id ?? ''} onChange={(e) => set('machine_id', e.target.value)}>
-            <option value="">— Select machine —</option>
+            <option value="">Select machine</option>
             {available.map((m) => (
               <option key={m.id} value={m.id}>
-                {m.machine_number} — {m.machine_type}
+                {m.machine_number} · {m.machine_type}
               </option>
             ))}
           </select>

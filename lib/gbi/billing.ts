@@ -1,4 +1,4 @@
-// Pure billing computation — converts a verified daily-hour entry into a
+// Pure billing computation : converts a verified daily-hour entry into a
 // charge using the effective billing rule. Kept side-effect free so it can be
 // unit-reasoned and reused by both the preview and the commit path.
 

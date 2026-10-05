@@ -1,4 +1,4 @@
-// Pure overtime computation — derives an operator's overtime hours and pay for
+// Pure overtime computation : derives an operator's overtime hours and pay for
 // a single daily-hour entry against the effective overtime rule. Side-effect
 // free so the preview and the commit path share identical maths.
 

@@ -43,7 +43,7 @@ export async function updateSession(request: NextRequest) {
   //
   // We use getClaims() instead of getUser(). getClaims() verifies the session
   // JWT LOCALLY against the project's signing keys (JWKS), which are fetched
-  // once and cached — so it does NOT hit the Supabase Auth server on every
+  // once and cached : so it does NOT hit the Supabase Auth server on every
   // request. That removes the per-request network dependency that previously
   // made the site flaky: no round-trip means no timeouts and, critically, no
   // IP-based 429 rate-limiting during traffic spikes (a deployment shares one
@@ -75,7 +75,7 @@ export async function updateSession(request: NextRequest) {
     // Distinguish "no session" from "couldn't verify right now". If a Supabase
     // auth cookie is present but verification errored (e.g. JWKS momentarily
     // unreachable), fail OPEN so an already-signed-in user is never locked out
-    // during an outage — the server components still do a full check. Only when
+    // during an outage : the server components still do a full check. Only when
     // there is genuinely no session do we redirect to login.
     const hasAuthCookie = request.cookies
       .getAll()

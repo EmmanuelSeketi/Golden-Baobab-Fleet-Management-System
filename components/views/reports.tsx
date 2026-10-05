@@ -27,7 +27,7 @@ function monthLabel(key: string) {
 
 export function ReportsView({ role }: { role: UserRole }) {
   const supabase = useSupabase()
-  const showRevenue = canAccess('Billing & Invoices', role)
+  const showRevenue = canAccess('Hiring Quotations', role)
   const since = useMemo(() => {
     const d = new Date()
     d.setMonth(d.getMonth() - 5)
@@ -79,7 +79,7 @@ export function ReportsView({ role }: { role: UserRole }) {
   const topMachines = useMemo(() => {
     const map = new Map<string, number>()
     for (const h of hours.data ?? []) {
-      const key = h.machine?.machine_number ?? '—'
+      const key = h.machine?.machine_number ?? 'N/A'
       map.set(key, (map.get(key) ?? 0) + Number(h.total_hours ?? 0))
     }
     return Array.from(map.entries())
@@ -91,7 +91,6 @@ export function ReportsView({ role }: { role: UserRole }) {
   return (
     <div className="page-wrap">
       <PageHeading
-        eyebrow="Analytics"
         title="Reports"
         description="Operational trends aggregated live from recorded working hours and invoicing."
       />

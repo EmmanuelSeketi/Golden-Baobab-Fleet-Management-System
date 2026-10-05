@@ -4,8 +4,8 @@ import { useEffect, useMemo, useState } from 'react'
 import { AlertTriangle, Building2, Eye, MapPin, Pencil, Plus } from 'lucide-react'
 import { useSupabase } from '@/lib/supabase/use-supabase'
 import { useQuery } from '@/lib/gbi/use-query'
-import { hours as fmtHours, shortDate } from '@/lib/gbi/format'
-import { canManageProjects, type UserRole } from '@/lib/gbi/roles'
+import { hours as fmtHours, shortDate, titleCase } from '@/lib/gbi/format'
+import { canAccess, canManageProjects, type UserRole } from '@/lib/gbi/roles'
 import {
   DetailGrid,
   MiniState,
@@ -63,7 +63,6 @@ export function ProjectsView({ role, userId }: { role: UserRole; userId: string 
   return (
     <div className="page-wrap">
       <PageHeading
-        eyebrow="Operations"
         title="Projects & Sites"
         description="Operational sites that machines and daily working hours are recorded against, optionally linked to a customer for billing."
         action={
@@ -112,10 +111,10 @@ export function ProjectsView({ role, userId }: { role: UserRole; userId: string 
                     <td>
                       <b>{p.name}</b>
                     </td>
-                    <td>{p.customer?.company_name ?? '—'}</td>
-                    <td>{p.site_location ?? '—'}</td>
+                    <td>{p.customer?.company_name ?? 'N/A'}</td>
+                    <td>{p.site_location ?? 'N/A'}</td>
                     <td>
-                      {p.deployment_start ? shortDate(p.deployment_start) : '—'} →{' '}
+                      {p.deployment_start ? shortDate(p.deployment_start) : 'N/A'} →{' '}
                       {p.deployment_end ? shortDate(p.deployment_end) : 'open'}
                     </td>
                     <td className="col-actions" onClick={(e) => e.stopPropagation()}>
@@ -146,6 +145,7 @@ export function ProjectsView({ role, userId }: { role: UserRole; userId: string 
       <ProjectDetailModal
         project={selected}
         canManage={canManage}
+        canViewContracts={canAccess('Customers & Contracts', role)}
         onEdit={() => selected && setForm({ mode: 'edit', row: selected })}
         onClose={() => setSelected(null)}
       />
@@ -167,7 +167,7 @@ export function ProjectsView({ role, userId }: { role: UserRole; userId: string 
 }
 
 // ---------------------------------------------------------------------------
-// Detail modal — project facts plus its recent daily-hour activity
+// Detail modal : project facts plus its recent daily-hour activity
 // ---------------------------------------------------------------------------
 
 type RecentEntry = {
@@ -177,14 +177,23 @@ type RecentEntry = {
   machine: { machine_number: string } | null
 }
 
+type ProjectContract = {
+  id: string
+  effective_from: string
+  effective_to: string | null
+  contract: { contract_number: string; status: string } | null
+}
+
 function ProjectDetailModal({
   project,
   canManage,
+  canViewContracts,
   onEdit,
   onClose,
 }: {
   project: Project | null
   canManage: boolean
+  canViewContracts: boolean
   onEdit: () => void
   onClose: () => void
 }) {
@@ -201,6 +210,20 @@ function ProjectDetailModal({
             .order('entry_date', { ascending: false })
             .limit(8) as unknown as PromiseLike<{ data: RecentEntry[] | null; error: unknown }>),
     [project?.id],
+  )
+  const contracts = useQuery<ProjectContract[]>(
+    () =>
+      !project || !canViewContracts
+        ? Promise.resolve({ data: [], error: null })
+        : (supabase
+            .from('project_contract')
+            .select('id,effective_from,effective_to,contract:contract_id(contract_number,status)')
+            .eq('project_id', project.id)
+            .order('effective_from', { ascending: false }) as unknown as PromiseLike<{
+            data: ProjectContract[] | null
+            error: unknown
+          }>),
+    [project?.id, canViewContracts],
   )
 
   return (
@@ -226,8 +249,8 @@ function ProjectDetailModal({
           <DetailGrid
             items={[
               ['Customer', project.customer?.company_name ?? 'Not linked'],
-              ['Site location', project.site_location ?? '—'],
-              ['Deployment start', project.deployment_start ? shortDate(project.deployment_start) : '—'],
+              ['Site location', project.site_location ?? 'N/A'],
+              ['Deployment start', project.deployment_start ? shortDate(project.deployment_start) : 'N/A'],
               ['Deployment end', project.deployment_end ? shortDate(project.deployment_end) : 'Open-ended'],
               ['Created', shortDate(project.created_at)],
             ]}
@@ -243,13 +266,35 @@ function ProjectDetailModal({
             {(recent.data ?? []).map((r) => (
               <div className="stack-row" key={r.id}>
                 <div>
-                  <b>{r.machine?.machine_number ?? '—'}</b>
+                  <b className="mono">{r.machine?.machine_number ?? 'N/A'}</b>
                   <span>{shortDate(r.entry_date)}</span>
                 </div>
                 <div className="stack-meta">{fmtHours(r.total_hours)}</div>
               </div>
             ))}
           </ModalSection>
+
+          {canViewContracts && (
+            <ModalSection title="Contract history" count={contracts.data?.length}>
+              <MiniState
+                status={contracts.status}
+                error={contracts.error}
+                isEmpty={(contracts.data ?? []).length === 0}
+                emptyText="No contracts linked to this project."
+              />
+              {(contracts.data ?? []).map((link) => (
+                <div className="stack-row" key={link.id}>
+                  <div>
+                    <b>{link.contract?.contract_number ?? 'N/A'}</b>
+                    <span>{link.contract?.status ? titleCase(link.contract.status) : ''}</span>
+                  </div>
+                  <div className="stack-meta">
+                    {shortDate(link.effective_from)} → {link.effective_to ? shortDate(link.effective_to) : 'current'}
+                  </div>
+                </div>
+              ))}
+            </ModalSection>
+          )}
         </>
       )}
     </Modal>
@@ -280,7 +325,7 @@ function ProjectFormModal({
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
 
   // Customers the signed-in role can read (RLS applies). Operations managers
-  // may see none — in that case a project is simply created without a customer.
+  // may see none : in that case a project is simply created without a customer.
   const customers = useQuery<CustomerPick[]>(
     () =>
       !open
@@ -381,7 +426,7 @@ function ProjectFormModal({
         <div className="form-field full">
           <label htmlFor="pj-customer">Customer (optional)</label>
           <select id="pj-customer" value={form.customer_id ?? ''} onChange={(e) => set('customer_id', e.target.value)}>
-            <option value="">— No customer (stand-alone site) —</option>
+            <option value="">No customer (stand-alone site)</option>
             {(customers.data ?? []).map((c) => (
               <option key={c.id} value={c.id}>
                 {c.company_name}
@@ -389,7 +434,7 @@ function ProjectFormModal({
             ))}
           </select>
           {customers.status === 'ready' && (customers.data ?? []).length === 0 && (
-            <span className="field-hint">No customers available to link — the project will stand alone.</span>
+            <span className="field-hint">No customers available to link : the project will stand alone.</span>
           )}
         </div>
         <Field
