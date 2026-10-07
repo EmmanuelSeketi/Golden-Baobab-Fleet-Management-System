@@ -33,9 +33,31 @@ type CustomerPick = { id: string; company_name: string }
 
 const SELECT =
   'id,name,customer_id,site_location,deployment_start,deployment_end,status,created_at,customer:customer_id(company_name)'
+const SELECT_WITHOUT_STATUS =
+  'id,name,customer_id,site_location,deployment_start,deployment_end,created_at,customer:customer_id(company_name)'
 
 function projectStatusLabel(status: Project['status']): string {
   return status === 'not_started' ? 'Not started' : status === 'ongoing' ? 'Ongoing' : 'Completed'
+}
+
+function statusFromDates(project: Pick<Project, 'deployment_start' | 'deployment_end'>): Project['status'] {
+  const today = new Date().toISOString().slice(0, 10)
+  if (project.deployment_end && project.deployment_end < today) return 'completed'
+  if (project.deployment_start && project.deployment_start <= today) return 'ongoing'
+  return 'not_started'
+}
+
+function currentProjectStatus(project: Project): Project['status'] {
+  if (project.deployment_end && project.deployment_end < new Date().toISOString().slice(0, 10)) {
+    return 'completed'
+  }
+  return project.status
+}
+
+function isMissingStatusColumn(error: unknown): boolean {
+  if (typeof error !== 'object' || error === null || !('message' in error)) return false
+  const message = String(error.message)
+  return /status/i.test(message) && /(column|schema cache|does not exist|could not find)/i.test(message)
 }
 
 export function ProjectsView({ role, userId }: { role: UserRole; userId: string }) {
@@ -43,18 +65,55 @@ export function ProjectsView({ role, userId }: { role: UserRole; userId: string 
   const [query, setQuery] = useState('')
   const [selected, setSelected] = useState<Project | null>(null)
   const [form, setForm] = useState<{ mode: 'add' | 'edit'; row: Project | null } | null>(null)
+  const [statusColumnAvailable, setStatusColumnAvailable] = useState<boolean | null>(null)
   const canManage = canManageProjects(role)
+  const canViewCustomers = canAccess('Customers & Contracts', role)
 
   const projects = useQuery<Project[]>(
     async () => {
-      const { error } = await supabase.rpc('complete_elapsed_projects')
-      if (error) return { data: null, error }
-      return await supabase.from('project').select(SELECT).order('name') as unknown as {
-        data: Project[] | null
-        error: unknown
+      const select = canViewCustomers ? SELECT : SELECT.replace(',customer:customer_id(company_name)', '')
+      const result = await supabase
+        .from('project')
+        .select(select)
+        .order('name') as unknown as { data: Project[] | null; error: unknown }
+
+      if (!result.error) {
+        setStatusColumnAvailable(true)
+        return {
+          ...result,
+          data: !canViewCustomers && result.data
+            ? result.data.map((project) => ({ ...project, customer: null }))
+            : result.data,
+        }
+      }
+      if (!isMissingStatusColumn(result.error)) {
+        setStatusColumnAvailable(null)
+        return result
+      }
+
+      const fallbackSelect = canViewCustomers
+        ? SELECT_WITHOUT_STATUS
+        : SELECT_WITHOUT_STATUS.replace(',customer:customer_id(company_name)', '')
+      const fallback = await supabase
+        .from('project')
+        .select(fallbackSelect)
+        .order('name') as unknown as { data: Omit<Project, 'status'>[] | null; error: unknown }
+      if (fallback.error || !fallback.data) {
+        setStatusColumnAvailable(null)
+        return { data: null, error: fallback.error ?? new Error('The project query returned no data.') }
+      }
+
+      setStatusColumnAvailable(false)
+      return {
+        data: fallback.data.map((project) => ({
+          ...project,
+          customer: canViewCustomers ? project.customer : null,
+          status: statusFromDates(project),
+        })),
+        error: null,
       }
     },
-    [canManage],
+    [],
   )
 
   const rows = useMemo(() => {
@@ -128,8 +187,8 @@ export function ProjectsView({ role, userId }: { role: UserRole; userId: string 
                       {p.deployment_end ? shortDate(p.deployment_end) : 'open'}
                     </td>
                     <td>
-                      <StatusBadge tone={p.status === 'completed' ? 'green' : p.status === 'ongoing' ? 'blue' : 'neutral'}>
-                        {projectStatusLabel(p.status)}
+                      <StatusBadge tone={currentProjectStatus(p) === 'completed' ? 'green' : currentProjectStatus(p) === 'ongoing' ? 'blue' : 'neutral'}>
+                        {projectStatusLabel(currentProjectStatus(p))}
                       </StatusBadge>
                     </td>
                     <td className="col-actions" onClick={(e) => e.stopPropagation()}>
@@ -169,6 +228,7 @@ export function ProjectsView({ role, userId }: { role: UserRole; userId: string 
         <ProjectFormModal
           state={form}
           userId={userId}
+          statusColumnAvailable={statusColumnAvailable === true}
           onClose={() => setForm(null)}
           onSaved={() => {
             setForm(null)
@@ -267,7 +327,7 @@ function ProjectDetailModal({
               ['Site location', project.site_location ?? 'N/A'],
               ['Deployment start', project.deployment_start ? shortDate(project.deployment_start) : 'N/A'],
               ['Deployment end', project.deployment_end ? shortDate(project.deployment_end) : 'Open-ended'],
-              ['Status', projectStatusLabel(project.status)],
+              ['Status', projectStatusLabel(currentProjectStatus(project))],
               ['Created', shortDate(project.created_at)],
             ]}
           />
@@ -324,11 +384,13 @@ function ProjectDetailModal({
 function ProjectFormModal({
   state,
   userId,
+  statusColumnAvailable,
   onClose,
   onSaved,
 }: {
   state: { mode: 'add' | 'edit'; row: Project | null } | null
   userId: string
+  statusColumnAvailable: boolean
   onClose: () => void
   onSaved: () => void
 }) {
@@ -362,7 +424,7 @@ function ProjectFormModal({
       site_location: row?.site_location ?? '',
       deployment_start: row?.deployment_start ?? '',
       deployment_end: row?.deployment_end ?? '',
-      status: row?.status ?? 'not_started',
+      status: row ? currentProjectStatus(row) : 'not_started',
     })
     setFieldErrors({})
     setFormError('')
@@ -387,7 +449,7 @@ function ProjectFormModal({
       site_location: form.site_location?.trim() ? form.site_location.trim() : null,
       deployment_start: form.deployment_start?.trim() ? form.deployment_start : null,
       deployment_end: form.deployment_end?.trim() ? form.deployment_end : null,
-      status: form.status || 'not_started',
+      ...(statusColumnAvailable ? { status: form.status || 'not_started' } : {}),
     }
 
     setSaving(true)
@@ -477,12 +539,21 @@ function ProjectFormModal({
         />
         <div className="form-field">
           <label htmlFor="pj-status">Status</label>
-          <select id="pj-status" value={form.status ?? 'not_started'} onChange={(event) => set('status', event.target.value)}>
+          <select
+            id="pj-status"
+            value={form.status ?? 'not_started'}
+            onChange={(event) => set('status', event.target.value)}
+            disabled={!statusColumnAvailable}
+          >
             <option value="not_started">Not started</option>
             <option value="ongoing">Ongoing</option>
             <option value="completed">Completed</option>
           </select>
-          <span className="field-hint">Projects are marked Completed the next time this page loads after their deployment end date.</span>
+          <span className="field-hint">
+            {statusColumnAvailable
+              ? 'Projects are marked Completed when their deployment end date has passed.'
+              : 'Apply migration 009 to enable saved project statuses; the status shown is based on the deployment dates.'}
+          </span>
         </div>
       </div>
     </Modal>
