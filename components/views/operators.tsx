@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { Camera, Eye, MapPin, Pencil, Trash2 } from 'lucide-react'
+import { Camera, Eye, Pencil, Trash2 } from 'lucide-react'
 import { useSupabase } from '@/lib/supabase/use-supabase'
 import { useQuery } from '@/lib/gbi/use-query'
 import {
@@ -60,7 +60,7 @@ export function OperatorsView({ role, userId }: { role: UserRole; userId: string
   const [query, setQuery] = useState('')
   const [selected, setSelected] = useState<Operator | null>(null)
   const [formTarget, setFormTarget] = useState<Operator | null>(null)
-  const [formMode, setFormMode] = useState<'add' | 'edit' | 'assign' | null>(null)
+  const [formMode, setFormMode] = useState<'add' | 'edit' | null>(null)
   const [deleting, setDeleting] = useState<Operator | null>(null)
   const [deleteBusy, setDeleteBusy] = useState(false)
   const [deleteError, setDeleteError] = useState('')
@@ -113,11 +113,6 @@ export function OperatorsView({ role, userId }: { role: UserRole; userId: string
 
   function assignedFor(operatorId: string): MachineLite[] {
     return machineByOperator.get(operatorId) ?? []
-  }
-
-  function openAssignment(operator: Operator) {
-    setFormTarget(operator)
-    setFormMode('assign')
   }
 
   async function confirmDelete() {
@@ -255,11 +250,6 @@ export function OperatorsView({ role, userId }: { role: UserRole; userId: string
                             ...(canManage
                               ? [
                                   {
-                                    label: 'Assign machines',
-                                    icon: MapPin,
-                                    onClick: () => openAssignment(o),
-                                  },
-                                  {
                                     label: 'Edit operator',
                                     icon: Pencil,
                                     onClick: () => {
@@ -295,7 +285,6 @@ export function OperatorsView({ role, userId }: { role: UserRole; userId: string
           setFormTarget(selected)
           setFormMode('edit')
         }}
-        onAssign={() => selected && openAssignment(selected)}
         onDelete={() => setDeleting(selected)}
         onClose={() => setSelected(null)}
       />
@@ -365,7 +354,6 @@ function OperatorModal({
   assigned,
   canManage,
   onEdit,
-  onAssign,
   onDelete,
   onClose,
 }: {
@@ -373,7 +361,6 @@ function OperatorModal({
   assigned: MachineLite[]
   canManage: boolean
   onEdit: () => void
-  onAssign: () => void
   onDelete: () => void
   onClose: () => void
 }) {
@@ -426,9 +413,6 @@ function OperatorModal({
             </StatusBadge>
             {canManage && (
               <div className="modal-foot-actions">
-                <button className="button button-secondary" onClick={onAssign}>
-                  Assign machines
-                </button>
                 <button className="button button-secondary" onClick={onEdit}>
                   Edit
                 </button>
@@ -533,7 +517,7 @@ function OperatorFormModal({
   onSaved,
 }: {
   open: boolean
-  mode: 'add' | 'edit' | 'assign'
+  mode: 'add' | 'edit'
   operator: Operator | null
   userId: string
   operators: Operator[]
@@ -600,14 +584,6 @@ function OperatorFormModal({
     setForm((f) => ({ ...f, [key]: value }))
   }
 
-  function toggleMachine(machineId: string) {
-    setMachineIds((current) =>
-      current.includes(machineId)
-        ? current.filter((id) => id !== machineId)
-        : [...current, machineId],
-    )
-  }
-
   async function chooseProfilePicture(file: File | undefined) {
     if (!file) return
     setPictureBusy(true)
@@ -627,9 +603,9 @@ function OperatorFormModal({
   async function submit() {
     if (pictureBusy) return
     const errors: Record<string, string> = {}
-    if (mode !== 'assign' && !form.full_name?.trim()) errors.full_name = 'Full name is required.'
+    if (!form.full_name?.trim()) errors.full_name = 'Full name is required.'
     const salary = form.base_salary?.trim()
-    if (mode !== 'assign' && salary && (!Number.isFinite(Number(salary)) || Number(salary) < 0))
+    if (salary && (!Number.isFinite(Number(salary)) || Number(salary) < 0))
       errors.base_salary = 'Base salary must be a non-negative amount.'
     setFieldErrors(errors)
     setFormError('')
@@ -664,7 +640,7 @@ function OperatorFormModal({
 
     let newProfilePath: string | null = null
     let previousProfilePath: string | null = null
-    if (!error && opId && mode !== 'assign' && (profilePicture || removeProfilePicture)) {
+    if (!error && opId && (profilePicture || removeProfilePicture)) {
       if (profilePicture) {
         newProfilePath = `${opId}/${crypto.randomUUID()}.webp`
         const { error: uploadError } = await supabase.storage
@@ -742,11 +718,9 @@ function OperatorFormModal({
       open={open}
       onClose={saving ? () => {} : onClose}
       eyebrow="Operators"
-      title={mode === 'assign' ? 'Assign machines' : mode === 'edit' ? 'Edit Operator' : 'Add Operator'}
+      title={mode === 'edit' ? 'Edit Operator' : 'Add Operator'}
       subtitle={
-        mode === 'assign'
-          ? `Select the machines assigned to ${operator?.full_name ?? 'this operator'}. Changes stay in sync with the Fleet Register.`
-          : mode === 'edit'
+        mode === 'edit'
           ? 'Update this operator’s details, work status and machine assignment.'
             : 'Register a new operator and optionally assign machines.'
       }
@@ -756,7 +730,7 @@ function OperatorFormModal({
             Cancel
           </button>
           <button className="button button-primary" onClick={submit} disabled={saving}>
-            {saving ? 'Saving…' : mode === 'assign' ? 'Save assignments' : mode === 'edit' ? 'Save changes' : 'Save Operator'}
+            {saving ? 'Saving…' : mode === 'edit' ? 'Save changes' : 'Save Operator'}
           </button>
         </div>
       }
@@ -766,8 +740,7 @@ function OperatorFormModal({
           <div className="form-error">{formError}</div>
         )}
 
-        {mode !== 'assign' && (
-          <>
+        <>
             <div className="operator-photo-field full">
               <div className="operator-photo-preview">
                 {profilePreview ? <img src={profilePreview} alt="Operator profile preview" /> : <Camera size={22} />}
@@ -845,38 +818,77 @@ function OperatorFormModal({
                 ))}
               </select>
             </div>
-          </>
-        )}
+        </>
 
         <div className="form-field full">
-          <label>Machines assigned to this operator</label>
+          <label>Assigned machines</label>
           {machineOptions.length === 0 ? (
             <span className="field-hint">No available machines to assign.</span>
           ) : (
-            <div className="form-check-list">
-              {machineOptions.map((m) => (
-                <label className="form-check-row" key={m.id}>
-                  <input
-                    type="checkbox"
-                    checked={machineIds.includes(m.id)}
-                    onChange={() => toggleMachine(m.id)}
-                    disabled={!isActive}
-                  />
-                  <span>
-                    {m.machine_number} · {m.machine_type}
-                    {m.assigned_operator_id && m.assigned_operator_id !== operator?.id
-                      ? ` · currently assigned to ${operators.find((candidate) => candidate.id === m.assigned_operator_id)?.full_name ?? 'another operator'}; selecting will reassign it`
-                      : ''}
-                  </span>
-                </label>
+            <>
+              {machineIds.map((machineId, index) => (
+                <select
+                  key={`${machineId}-${index}`}
+                  aria-label={`Assigned machine ${index + 1}`}
+                  value={machineId}
+                  onChange={(event) => {
+                    const selectedId = event.target.value
+                    setMachineIds((current) =>
+                      current
+                        .map((id, currentIndex) => (currentIndex === index ? selectedId : id))
+                        .filter(Boolean),
+                    )
+                  }}
+                  disabled={!isActive}
+                  style={{ marginBottom: 8 }}
+                >
+                  <option value="">Unassigned</option>
+                  {machineOptions
+                    .filter((machine) => machine.id === machineId || !machineIds.includes(machine.id))
+                    .map((m) => {
+                      const assignedOperator = operators.find((candidate) => candidate.id === m.assigned_operator_id)
+                      const reassignment =
+                        m.assigned_operator_id && m.assigned_operator_id !== operator?.id
+                          ? ` (currently assigned to ${assignedOperator?.full_name ?? 'another operator'})`
+                          : ''
+                      return (
+                        <option key={m.id} value={m.id}>
+                          {m.machine_number} · {m.machine_type}{reassignment}
+                        </option>
+                      )
+                    })}
+                </select>
               ))}
-            </div>
+              <select
+                aria-label="Add a machine assignment"
+                value=""
+                onChange={(event) => {
+                  if (event.target.value) setMachineIds((current) => [...current, event.target.value])
+                }}
+                disabled={!isActive}
+              >
+                <option value="">Select a machine to assign…</option>
+                {machineOptions
+                  .filter((machine) => !machineIds.includes(machine.id))
+                  .map((m) => {
+                    const assignedOperator = operators.find((candidate) => candidate.id === m.assigned_operator_id)
+                    const reassignment =
+                      m.assigned_operator_id && m.assigned_operator_id !== operator?.id
+                        ? ` (currently assigned to ${assignedOperator?.full_name ?? 'another operator'})`
+                        : ''
+                    return (
+                      <option key={m.id} value={m.id}>
+                        {m.machine_number} · {m.machine_type}{reassignment}
+                      </option>
+                    )
+                  })}
+              </select>
+            </>
           )}
           {!isActive && <span className="field-hint">Inactive operators are unassigned when saved.</span>}
         </div>
 
-        {mode !== 'assign' && (
-          <>
+        <>
             <OField
               label="Employment date"
               type="date"
@@ -913,8 +925,7 @@ function OperatorFormModal({
               />
               <label htmlFor="op-active">Active (currently employed)</label>
             </div>
-          </>
-        )}
+        </>
       </div>
     </Modal>
   )
