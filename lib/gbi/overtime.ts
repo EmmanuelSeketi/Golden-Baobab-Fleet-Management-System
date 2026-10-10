@@ -21,6 +21,7 @@ export type OvertimeSourceEntry = {
   entry_date: string
   operator_id: string | null
   total_hours: number
+  base_salary?: number | null
 }
 
 export type OvertimeLine = {
@@ -34,13 +35,13 @@ export type OvertimeLine = {
 
 const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100
 
-// Sensible fallbacks used when no overtime rule is configured yet, so overtime
-// hours always reflect from daily hours even before an administrator sets up a
-// rule. Pay stays 0 until a rule with a base hourly rate exists.
+// Daily threshold fallback used before an effective overtime rule is configured.
+// Pay uses the operator's current monthly salary; a missing salary yields 0.
 export const DEFAULT_STANDARD_HOURS = 8
 export const DEFAULT_WEEKDAY_MULTIPLIER = 1.5
+export const OVERTIME_MONTHLY_HOURS = 208
 
-/** Rule in force on a date. operator_category null = applies to all operators. */
+/** Rule in force on a date; operator_category null = applies to all operators. */
 export function pickOvertimeRule(rules: OvertimeRule[], isoDate: string): OvertimeRule | null {
   for (const r of rules) {
     if (r.effective_from <= isoDate && (r.effective_to == null || r.effective_to >= isoDate)) {
@@ -50,11 +51,9 @@ export function pickOvertimeRule(rules: OvertimeRule[], isoDate: string): Overti
   return null
 }
 
-function dayMultiplier(rule: OvertimeRule, isoDate: string): number {
+export function overtimeDayMultiplier(isoDate: string): number {
   const day = new Date(`${isoDate}T00:00:00Z`).getUTCDay()
-  if (day === 6 && rule.saturday_rate_multiplier != null) return Number(rule.saturday_rate_multiplier)
-  if (day === 0 && rule.sunday_rate_multiplier != null) return Number(rule.sunday_rate_multiplier)
-  return rule.weekday_rate_multiplier != null ? Number(rule.weekday_rate_multiplier) : 1.5
+  return day === 0 || day === 6 ? 2 : DEFAULT_WEEKDAY_MULTIPLIER
 }
 
 /**
@@ -69,9 +68,10 @@ export function computeOvertime(entry: OvertimeSourceEntry, rule: OvertimeRule):
   if (overtimeHours <= 0) return null
 
   const standardHours = Math.min(total, std)
-  const base = rule.base_hourly_rate != null ? Number(rule.base_hourly_rate) : 0
-  const multiplier = dayMultiplier(rule, entry.entry_date)
-  const pay = round2(overtimeHours * base * multiplier)
+  const baseSalary = entry.base_salary != null ? Number(entry.base_salary) : 0
+  const hourlyWage = baseSalary / OVERTIME_MONTHLY_HOURS
+  const multiplier = overtimeDayMultiplier(entry.entry_date)
+  const pay = round2(overtimeHours * hourlyWage * multiplier)
 
   return {
     daily_hour_entry_id: entry.id,
@@ -108,9 +108,10 @@ export function deriveOvertime(entry: OvertimeSourceEntry, rule: OvertimeRule | 
   if (overtimeHours <= 0) return null
 
   const standardHours = Math.min(total, std)
-  const base = rule?.base_hourly_rate != null ? Number(rule.base_hourly_rate) : 0
-  const multiplier = rule ? dayMultiplier(rule, entry.entry_date) : DEFAULT_WEEKDAY_MULTIPLIER
-  const pay = round2(overtimeHours * base * multiplier)
+  const baseSalary = entry.base_salary != null ? Number(entry.base_salary) : 0
+  const hourlyWage = baseSalary / OVERTIME_MONTHLY_HOURS
+  const multiplier = overtimeDayMultiplier(entry.entry_date)
+  const pay = round2(overtimeHours * hourlyWage * multiplier)
 
   return {
     standardHours: round2(standardHours),

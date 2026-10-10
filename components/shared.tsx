@@ -250,7 +250,7 @@ export function ModalSection({
         </h3>
         {action}
       </div>
-      {children}
+      <div className="modal-section-content">{children}</div>
     </section>
   )
 }

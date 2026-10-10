@@ -24,6 +24,17 @@ Open [http://localhost:3000](http://localhost:3000) with your browser to see the
 
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
+## Database setup and backups
+
+Run `scripts/013_operator_profile_picture.sql` in the Supabase SQL Editor to add the operator profile-picture field
+and configure the compressed WebP storage bucket. The operator-module machine assignment action uses the
+`sync_operator_machine_assignments` function from `scripts/005_project_contract_and_assignment_flow.sql`; ensure
+that migration has also been applied to the database.
+
+The Settings & Backup page can download JSON snapshots or SQL `INSERT` statements for the listed tables. SQL
+downloads contain records readable by the signed-in role, not database schema, functions, or files in Supabase
+Storage. Use Supabase's database backup facilities for a complete schema-and-data backup.
+
 ## Learn More
 
 To learn more, take a look at the following resources:

@@ -15,7 +15,7 @@ import { useSupabase } from '@/lib/supabase/use-supabase'
 import { useQuery } from '@/lib/gbi/use-query'
 import { dateTime, titleCase } from '@/lib/gbi/format'
 import { ROLE_LABEL, type AppUser, type UserRole } from '@/lib/gbi/roles'
-import { DetailGrid, Modal, PageHeading, StatusBadge, ViewState } from '@/components/shared'
+import { DetailGrid, Modal, PageHeading, RowActions, StatusBadge, ViewState } from '@/components/shared'
 
 const ROLES: UserRole[] = ['administrator', 'operations_manager', 'management', 'accounts_billing']
 
@@ -119,10 +119,10 @@ function UsersPanel({ currentUserId }: { currentUserId: string }) {
                     </td>
                     <td>{dateTime(u.created_at)}</td>
                     <td className="col-actions">
-                      <button className="button button-secondary button-sm" onClick={() => setEditing(u)}>
-                        <Pencil size={13} />
-                        Edit
-                      </button>
+                      <RowActions
+                        label={`Actions for ${u.full_name}`}
+                        actions={[{ label: 'Edit user', icon: Pencil, onClick: () => setEditing(u) }]}
+                      />
                     </td>
                   </tr>
                 ))}
@@ -434,15 +434,16 @@ function SettingEditModal({
 // ---------------------------------------------------------------------------
 
 const EXPORT_TABLES = [
-  'machine',
-  'operator',
   'customer',
+  'operator',
+  'project',
+  'machine',
   'contract',
   'contract_machine',
   'project_contract',
+  'billing_rule',
   'hiring_quotation',
   'hiring_quotation_item',
-  'billing_rule',
   'daily_hour_entry',
   'overtime_rule',
   'overtime_entry',
@@ -459,35 +460,79 @@ function BackupPanel() {
   const [progress, setProgress] = useState('')
   const [error, setError] = useState('')
   const [lastExport, setLastExport] = useState<string | null>(null)
+  const [lastExportFormat, setLastExportFormat] = useState<'JSON' | 'SQL' | null>(null)
 
-  async function exportAll() {
+  async function exportAll(format: 'json' | 'sql') {
     setRunning(true)
     setError('')
     setProgress('Starting…')
     const snapshot: Record<string, unknown[]> = {}
+    const sqlStatements = [
+      '-- GBI Fleet data export. This file contains table data only, not schema or Storage files.',
+      'BEGIN;',
+    ]
     try {
       for (const table of EXPORT_TABLES) {
         setProgress(`Exporting ${table}…`)
-        const { data, error: qErr } = await supabase.from(table).select('*')
-        if (qErr) throw qErr
-        snapshot[table] = data ?? []
+        const rows: Record<string, unknown>[] = []
+        let offset = 0
+        while (true) {
+          const { data, error: qErr } = await supabase
+            .from(table)
+            .select('*')
+            .range(offset, offset + 999)
+          if (qErr) throw qErr
+          const page = (data ?? []) as Record<string, unknown>[]
+          rows.push(...page)
+          offset += page.length
+          if (page.length < 1000) break
+        }
+        snapshot[table] = rows
+        if (format === 'sql' && rows.length > 0) {
+          const columns = Object.keys(rows[0])
+          const columnList = columns.map(quoteSqlIdentifier).join(', ')
+          const values = rows.map(
+            (row) => `(${columns.map((column) => toSqlLiteral(row[column])).join(', ')})`,
+          )
+          sqlStatements.push(
+            `INSERT INTO public.${quoteSqlIdentifier(table)} (${columnList})\nVALUES\n${values.join(',\n')};`,
+          )
+        }
       }
-      const payload = {
-        exported_at: new Date().toISOString(),
-        source: 'GBI Fleet Operations',
-        tables: snapshot,
-      }
-      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' })
+      const exportedAt = new Date().toISOString()
+      const blob =
+        format === 'json'
+          ? new Blob(
+              [
+                JSON.stringify(
+                  { exported_at: exportedAt, source: 'GBI Fleet Operations', tables: snapshot },
+                  null,
+                  2,
+                ),
+              ],
+              { type: 'application/json' },
+            )
+          : new Blob([[...sqlStatements, 'COMMIT;', ''].join('\n\n')], {
+              type: 'application/sql;charset=utf-8',
+            })
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = `gbi-fleet-backup-${new Date().toISOString().slice(0, 10)}.json`
+      a.download = `gbi-fleet-backup-${exportedAt.slice(0, 10)}.${format}`
       a.click()
       URL.revokeObjectURL(url)
-      setLastExport(new Date().toISOString())
+      setLastExport(exportedAt)
+      setLastExportFormat(format.toUpperCase() as 'JSON' | 'SQL')
       setProgress('')
-    } catch {
-      setError('Could not complete the export. Some tables may be restricted for your role.')
+    } catch (exportError) {
+      const message =
+        typeof exportError === 'object' &&
+        exportError !== null &&
+        'message' in exportError &&
+        typeof exportError.message === 'string'
+          ? exportError.message
+          : 'Unknown export error.'
+      setError(`Could not complete the ${format.toUpperCase()} export: ${message}`)
       setProgress('')
     } finally {
       setRunning(false)
@@ -503,8 +548,8 @@ function BackupPanel() {
         <div>
           <h2>Data export</h2>
           <p>
-            Download a JSON snapshot of all operational and commercial records. Use this for off-site backups and
-            record-keeping.
+            Download operational and commercial records as JSON or SQL INSERT statements. Exports include
+            records your role can read; SQL exports do not include database schema or Storage files.
           </p>
         </div>
       </div>
@@ -519,16 +564,20 @@ function BackupPanel() {
       <DetailGrid
         items={[
           ['Tables included', `${EXPORT_TABLES.length}`],
-          ['Format', 'JSON snapshot'],
-          ['Last export', lastExport ? dateTime(lastExport) : 'Not exported this session'],
+          ['Formats', 'JSON snapshot, SQL data statements'],
+          ['Last export', lastExport ? `${dateTime(lastExport)} (${lastExportFormat})` : 'Not exported this session'],
           ['Scope', 'All records your role can read'],
         ]}
       />
 
       <div className="backup-actions">
-        <button className="button button-primary" onClick={exportAll} disabled={running}>
+        <button className="button button-primary" onClick={() => exportAll('json')} disabled={running}>
           <Download size={15} />
           {running ? progress || 'Exporting…' : 'Export all data (JSON)'}
+        </button>
+        <button className="button button-secondary" onClick={() => exportAll('sql')} disabled={running}>
+          <Download size={15} />
+          {running ? progress || 'Exporting…' : 'Download SQL data'}
         </button>
       </div>
 
@@ -536,10 +585,26 @@ function BackupPanel() {
         <ShieldCheck size={15} />
         <span>
           <b>Restoring data</b> is performed from the Supabase dashboard using point-in-time recovery or a database
-          restore, which safely rebuilds tables and relationships. This export is your portable copy for audits and
-          off-site retention.
+          restore, which safely rebuilds tables and relationships. The SQL file contains exported row data and can
+          be run against a database with a compatible schema.
         </span>
       </div>
     </div>
   )
+}
+
+function quoteSqlIdentifier(value: string): string {
+  return `"${value.replace(/"/g, '""')}"`
+}
+
+function toSqlLiteral(value: unknown): string {
+  if (value == null) return 'NULL'
+  if (typeof value === 'boolean') return value ? 'TRUE' : 'FALSE'
+  if (typeof value === 'number') {
+    if (!Number.isFinite(value)) throw new Error('A record contains a non-finite number that cannot be exported.')
+    return String(value)
+  }
+  if (typeof value === 'string') return `'${value.replace(/'/g, "''")}'`
+  if (typeof value === 'object') return `'${JSON.stringify(value).replace(/'/g, "''")}'::jsonb`
+  throw new Error('A record contains a value that cannot be exported as SQL.')
 }

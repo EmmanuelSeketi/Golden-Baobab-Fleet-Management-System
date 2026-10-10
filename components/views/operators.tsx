@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { Eye, Pencil, Trash2 } from 'lucide-react'
+import { Camera, Eye, MapPin, Pencil, Trash2 } from 'lucide-react'
 import { useSupabase } from '@/lib/supabase/use-supabase'
 import { useQuery } from '@/lib/gbi/use-query'
 import {
@@ -10,6 +10,7 @@ import {
   operatorStatusTone,
   shortDate,
   titleCase,
+  money,
 } from '@/lib/gbi/format'
 import { canManageOps, type UserRole } from '@/lib/gbi/roles'
 import {
@@ -35,6 +36,8 @@ type Operator = {
   licence_details: string | null
   certifications: string | null
   notes: string | null
+  base_salary: number | null
+  profile_picture_path: string | null
   is_active: boolean
   status: string
 }
@@ -48,7 +51,7 @@ type MachineLite = {
 }
 
 const LIST_SELECT =
-  'id,full_name,nrc_number,phone_number,address,emergency_contact,employment_date,licence_details,certifications,notes,is_active,status'
+  'id,full_name,nrc_number,phone_number,address,emergency_contact,employment_date,licence_details,certifications,notes,base_salary,profile_picture_path,is_active,status'
 
 const STATUS_OPTIONS = ['working', 'off', 'standby']
 
@@ -57,7 +60,7 @@ export function OperatorsView({ role, userId }: { role: UserRole; userId: string
   const [query, setQuery] = useState('')
   const [selected, setSelected] = useState<Operator | null>(null)
   const [formTarget, setFormTarget] = useState<Operator | null>(null)
-  const [formMode, setFormMode] = useState<'add' | 'edit' | null>(null)
+  const [formMode, setFormMode] = useState<'add' | 'edit' | 'assign' | null>(null)
   const [deleting, setDeleting] = useState<Operator | null>(null)
   const [deleteBusy, setDeleteBusy] = useState(false)
   const [deleteError, setDeleteError] = useState('')
@@ -110,6 +113,11 @@ export function OperatorsView({ role, userId }: { role: UserRole; userId: string
 
   function assignedFor(operatorId: string): MachineLite[] {
     return machineByOperator.get(operatorId) ?? []
+  }
+
+  function openAssignment(operator: Operator) {
+    setFormTarget(operator)
+    setFormMode('assign')
   }
 
   async function confirmDelete() {
@@ -202,14 +210,33 @@ export function OperatorsView({ role, userId }: { role: UserRole; userId: string
                   return (
                     <tr key={o.id} className="clickable-row" onClick={() => setSelected(o)}>
                       <td>
-                        <b>{o.full_name}</b>
+                        <div className="operator-table-cell">
+                          {o.profile_picture_path ? (
+                            <img
+                              src={
+                                supabase.storage
+                                  .from('operator-profiles')
+                                  .getPublicUrl(o.profile_picture_path).data.publicUrl
+                              }
+                              alt=""
+                            />
+                          ) : (
+                            <span aria-hidden="true">
+                              {o.full_name
+                                .split(/\s+/)
+                                .slice(0, 2)
+                                .map((part) => part[0])
+                                .join('')
+                                .toUpperCase()}
+                            </span>
+                          )}
+                          <b>{o.full_name}</b>
+                        </div>
                       </td>
                       <td>{o.nrc_number ?? 'N/A'}</td>
                       <td>
                         {assigned.length > 0 ? (
-                          <span className="assign-chip">
-                            {assigned.map((m) => m.machine_number).join(', ')}
-                          </span>
+                          assigned.map((m) => m.machine_number).join(', ')
                         ) : (
                           'N/A'
                         )}
@@ -223,12 +250,15 @@ export function OperatorsView({ role, userId }: { role: UserRole; userId: string
                       <td className="col-actions" onClick={(e) => e.stopPropagation()}>
                         <RowActions
                           label={`Actions for ${o.full_name}`}
-                          showActionIcons={false}
-                          showTriggerIcon={false}
                           actions={[
                             { label: 'View details', icon: Eye, onClick: () => setSelected(o) },
                             ...(canManage
                               ? [
+                                  {
+                                    label: 'Assign machines',
+                                    icon: MapPin,
+                                    onClick: () => openAssignment(o),
+                                  },
                                   {
                                     label: 'Edit operator',
                                     icon: Pencil,
@@ -265,6 +295,7 @@ export function OperatorsView({ role, userId }: { role: UserRole; userId: string
           setFormTarget(selected)
           setFormMode('edit')
         }}
+        onAssign={() => selected && openAssignment(selected)}
         onDelete={() => setDeleting(selected)}
         onClose={() => setSelected(null)}
       />
@@ -275,6 +306,7 @@ export function OperatorsView({ role, userId }: { role: UserRole; userId: string
           mode={formMode ?? 'add'}
           operator={formTarget}
           userId={userId}
+          operators={operators.data ?? []}
           machines={machines.data ?? []}
           currentMachineIds={formTarget ? assignedFor(formTarget.id).map((m) => m.id) : []}
           onClose={() => {
@@ -333,6 +365,7 @@ function OperatorModal({
   assigned,
   canManage,
   onEdit,
+  onAssign,
   onDelete,
   onClose,
 }: {
@@ -340,6 +373,7 @@ function OperatorModal({
   assigned: MachineLite[]
   canManage: boolean
   onEdit: () => void
+  onAssign: () => void
   onDelete: () => void
   onClose: () => void
 }) {
@@ -373,6 +407,9 @@ function OperatorModal({
 
   const totalRecent = (recentHours.data ?? []).reduce((s, h) => s + Number(h.total_hours ?? 0), 0)
   const assignedLabel = assigned.length > 0 ? assigned.map((m) => m.machine_number).join(', ') : 'N/A'
+  const profilePictureUrl = operator?.profile_picture_path
+    ? supabase.storage.from('operator-profiles').getPublicUrl(operator.profile_picture_path).data.publicUrl
+    : null
 
   return (
     <Modal
@@ -389,6 +426,9 @@ function OperatorModal({
             </StatusBadge>
             {canManage && (
               <div className="modal-foot-actions">
+                <button className="button button-secondary" onClick={onAssign}>
+                  Assign machines
+                </button>
                 <button className="button button-secondary" onClick={onEdit}>
                   Edit
                 </button>
@@ -403,6 +443,24 @@ function OperatorModal({
     >
       {operator && (
         <>
+          <div className="operator-profile-summary">
+            {profilePictureUrl ? (
+              <img src={profilePictureUrl} alt={`${operator.full_name} profile`} />
+            ) : (
+              <span className="operator-avatar-placeholder" aria-hidden="true">
+                {operator.full_name
+                  .split(/\s+/)
+                  .slice(0, 2)
+                  .map((part) => part[0])
+                  .join('')
+                  .toUpperCase()}
+              </span>
+            )}
+            <div>
+              <b>{operator.full_name}</b>
+              <span>{operator.phone_number ?? 'Operator profile'}</span>
+            </div>
+          </div>
           <DetailGrid
             items={[
               ['Status', OPERATOR_STATUS_LABEL[operator.status] ?? titleCase(operator.status)],
@@ -410,6 +468,7 @@ function OperatorModal({
               ['Employment', operator.is_active ? 'Active' : 'Inactive'],
               ['Phone', operator.phone_number ?? 'N/A'],
               ['Employment date', shortDate(operator.employment_date)],
+              ['Base salary', operator.base_salary == null ? 'Not set' : money(operator.base_salary)],
               ['Address', operator.address ?? 'N/A'],
               ['Emergency contact', operator.emergency_contact ?? 'N/A'],
               ['Licence', operator.licence_details ?? 'N/A'],
@@ -467,15 +526,17 @@ function OperatorFormModal({
   mode,
   operator,
   userId,
+  operators,
   machines,
   currentMachineIds,
   onClose,
   onSaved,
 }: {
   open: boolean
-  mode: 'add' | 'edit'
+  mode: 'add' | 'edit' | 'assign'
   operator: Operator | null
   userId: string
+  operators: Operator[]
   machines: MachineLite[]
   currentMachineIds: string[]
   onClose: () => void
@@ -486,14 +547,24 @@ function OperatorFormModal({
   const [isActive, setIsActive] = useState(true)
   const [status, setStatus] = useState('off')
   const [machineIds, setMachineIds] = useState<string[]>([])
+  const [profilePicture, setProfilePicture] = useState<Blob | null>(null)
+  const [profilePreview, setProfilePreview] = useState('')
+  const [removeProfilePicture, setRemoveProfilePicture] = useState(false)
+  const [pictureBusy, setPictureBusy] = useState(false)
   const [saving, setSaving] = useState(false)
   const [formError, setFormError] = useState('')
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
   const currentMachineKey = currentMachineIds.join('|')
 
   useEffect(() => {
+    return () => {
+      if (profilePreview.startsWith('blob:')) URL.revokeObjectURL(profilePreview)
+    }
+  }, [profilePreview])
+
+  useEffect(() => {
     if (!open) return
-    if (mode === 'edit' && operator) {
+    if (mode !== 'add' && operator) {
       setForm({
         full_name: operator.full_name ?? '',
         nrc_number: operator.nrc_number ?? '',
@@ -503,6 +574,7 @@ function OperatorFormModal({
         employment_date: operator.employment_date ?? '',
         licence_details: operator.licence_details ?? '',
         certifications: operator.certifications ?? '',
+        base_salary: operator.base_salary == null ? '' : String(operator.base_salary),
       })
       setIsActive(operator.is_active)
       setStatus(operator.status ?? 'off')
@@ -515,7 +587,14 @@ function OperatorFormModal({
     }
     setFieldErrors({})
     setFormError('')
-  }, [open, mode, operator, currentMachineKey])
+    setProfilePicture(null)
+    setRemoveProfilePicture(false)
+    setProfilePreview(
+      operator?.profile_picture_path
+        ? supabase.storage.from('operator-profiles').getPublicUrl(operator.profile_picture_path).data.publicUrl
+        : '',
+    )
+  }, [open, mode, operator, currentMachineKey, supabase])
 
   function set(key: string, value: string) {
     setForm((f) => ({ ...f, [key]: value }))
@@ -529,16 +608,36 @@ function OperatorFormModal({
     )
   }
 
+  async function chooseProfilePicture(file: File | undefined) {
+    if (!file) return
+    setPictureBusy(true)
+    setFormError('')
+    try {
+      const compressed = await compressProfilePicture(file)
+      setProfilePicture(compressed)
+      setProfilePreview(URL.createObjectURL(compressed))
+      setRemoveProfilePicture(false)
+    } catch (error) {
+      setFormError(error instanceof Error ? error.message : 'Could not process this profile picture.')
+    } finally {
+      setPictureBusy(false)
+    }
+  }
+
   async function submit() {
+    if (pictureBusy) return
     const errors: Record<string, string> = {}
-    if (!form.full_name?.trim()) errors.full_name = 'Full name is required.'
+    if (mode !== 'assign' && !form.full_name?.trim()) errors.full_name = 'Full name is required.'
+    const salary = form.base_salary?.trim()
+    if (mode !== 'assign' && salary && (!Number.isFinite(Number(salary)) || Number(salary) < 0))
+      errors.base_salary = 'Base salary must be a non-negative amount.'
     setFieldErrors(errors)
     setFormError('')
     if (Object.keys(errors).length > 0) return
 
     const text = (k: string) => (form[k]?.trim() ? form[k].trim() : null)
     const base = {
-      full_name: form.full_name.trim(),
+      full_name: form.full_name?.trim() ?? '',
       nrc_number: text('nrc_number'),
       phone_number: text('phone_number'),
       address: text('address'),
@@ -546,6 +645,7 @@ function OperatorFormModal({
       employment_date: text('employment_date'),
       licence_details: text('licence_details'),
       certifications: text('certifications'),
+      base_salary: text('base_salary') == null ? null : Number(form.base_salary),
       is_active: isActive,
       status,
     }
@@ -557,9 +657,42 @@ function OperatorFormModal({
       const res = await supabase.from('operator').insert({ ...base, created_by: userId }).select('id').single()
       error = res.error
       opId = (res.data?.id as string) ?? ''
-    } else {
+    } else if (mode === 'edit') {
       const res = await supabase.from('operator').update({ ...base, updated_by: userId }).eq('id', opId)
       error = res.error
+    }
+
+    let newProfilePath: string | null = null
+    let previousProfilePath: string | null = null
+    if (!error && opId && mode !== 'assign' && (profilePicture || removeProfilePicture)) {
+      if (profilePicture) {
+        newProfilePath = `${opId}/${crypto.randomUUID()}.webp`
+        const { error: uploadError } = await supabase.storage
+          .from('operator-profiles')
+          .upload(newProfilePath, profilePicture, {
+            cacheControl: '31536000',
+            contentType: 'image/webp',
+            upsert: false,
+          })
+        error = uploadError
+      }
+      if (!error) {
+        const { error: pictureUpdateError } = await supabase
+          .from('operator')
+          .update({ profile_picture_path: removeProfilePicture ? null : newProfilePath, updated_by: userId })
+          .eq('id', opId)
+        error = pictureUpdateError
+        if (error && newProfilePath) {
+          const { error: cleanupError } = await supabase.storage.from('operator-profiles').remove([newProfilePath])
+          if (cleanupError) {
+            setFormError('Could not save the profile picture, and its uploaded file could not be removed.')
+            setSaving(false)
+            return
+          }
+        } else if (!error) {
+          previousProfilePath = operator?.profile_picture_path ?? null
+        }
+      }
     }
 
     if (!error && opId) {
@@ -569,9 +702,23 @@ function OperatorFormModal({
       })
       error = assignmentError
     }
-    setSaving(false)
+    if (previousProfilePath && previousProfilePath !== newProfilePath) {
+      const { error: removeError } = await supabase.storage
+        .from('operator-profiles')
+        .remove([previousProfilePath])
+      if (removeError) {
+        setFormError(
+          error
+            ? 'The operator could not be fully saved, and the previous profile picture could not be removed.'
+            : 'The operator was saved, but the previous profile picture could not be removed.',
+        )
+        setSaving(false)
+        return
+      }
+    }
 
     if (error) {
+      setSaving(false)
       const code = (error as { code?: string }).code
       if (code === '23505') {
         setFieldErrors({ nrc_number: 'An operator with this NRC number already exists.' })
@@ -584,23 +731,22 @@ function OperatorFormModal({
       setFormError('Could not save this operator. Please check the values and try again.')
       return
     }
+    setSaving(false)
     onSaved()
   }
 
-  // Machines can be assigned to only one operator, while an operator may hold
-  // multiple machine assignments concurrently.
-  const machineOptions = machines.filter(
-    (m) => !m.assigned_operator_id || m.assigned_operator_id === operator?.id,
-  )
+  const machineOptions = machines
 
   return (
     <Modal
       open={open}
       onClose={saving ? () => {} : onClose}
       eyebrow="Operators"
-      title={mode === 'edit' ? 'Edit Operator' : 'Add Operator'}
+      title={mode === 'assign' ? 'Assign machines' : mode === 'edit' ? 'Edit Operator' : 'Add Operator'}
       subtitle={
-        mode === 'edit'
+        mode === 'assign'
+          ? `Select the machines assigned to ${operator?.full_name ?? 'this operator'}. Changes stay in sync with the Fleet Register.`
+          : mode === 'edit'
           ? 'Update this operator’s details, work status and machine assignment.'
             : 'Register a new operator and optionally assign machines.'
       }
@@ -610,7 +756,7 @@ function OperatorFormModal({
             Cancel
           </button>
           <button className="button button-primary" onClick={submit} disabled={saving}>
-            {saving ? 'Saving…' : mode === 'edit' ? 'Save changes' : 'Save Operator'}
+            {saving ? 'Saving…' : mode === 'assign' ? 'Save assignments' : mode === 'edit' ? 'Save changes' : 'Save Operator'}
           </button>
         </div>
       }
@@ -620,37 +766,90 @@ function OperatorFormModal({
           <div className="form-error">{formError}</div>
         )}
 
-        <OField
-          label="Full name"
-          required
-          full
-          value={form.full_name ?? ''}
-          onChange={(v) => set('full_name', v)}
-          error={fieldErrors.full_name}
-          placeholder="e.g. Chanda Mwale"
-        />
-        <OField
-          label="NRC number"
-          value={form.nrc_number ?? ''}
-          onChange={(v) => set('nrc_number', v)}
-          error={fieldErrors.nrc_number}
-          placeholder="e.g. 123456/78/9"
-        />
-        <OField label="Phone number" value={form.phone_number ?? ''} onChange={(v) => set('phone_number', v)} />
+        {mode !== 'assign' && (
+          <>
+            <div className="operator-photo-field full">
+              <div className="operator-photo-preview">
+                {profilePreview ? <img src={profilePreview} alt="Operator profile preview" /> : <Camera size={22} />}
+              </div>
+              <div>
+                <b>Profile picture</b>
+                <span>Compressed to WebP before upload to reduce storage usage.</span>
+                <div className="operator-photo-actions">
+                  <label className="button button-secondary button-sm">
+                    {pictureBusy ? 'Compressing…' : profilePreview ? 'Change picture' : 'Upload picture'}
+                    <input
+                      type="file"
+                      accept="image/*"
+                      hidden
+                      disabled={pictureBusy || saving}
+                      onChange={(event) => {
+                        void chooseProfilePicture(event.target.files?.[0])
+                        event.currentTarget.value = ''
+                      }}
+                    />
+                  </label>
+                  {profilePreview && (
+                    <button
+                      type="button"
+                      className="button button-secondary button-sm"
+                      onClick={() => {
+                        setProfilePicture(null)
+                        setProfilePreview('')
+                        setRemoveProfilePicture(true)
+                      }}
+                      disabled={saving || pictureBusy}
+                    >
+                      Remove
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+            <OField
+              label="Full name"
+              required
+              full
+              value={form.full_name ?? ''}
+              onChange={(v) => set('full_name', v)}
+              error={fieldErrors.full_name}
+              placeholder="e.g. Chanda Mwale"
+            />
+            <OField
+              label="NRC number"
+              value={form.nrc_number ?? ''}
+              onChange={(v) => set('nrc_number', v)}
+              error={fieldErrors.nrc_number}
+              placeholder="e.g. 123456/78/9"
+            />
+            <OField label="Phone number" value={form.phone_number ?? ''} onChange={(v) => set('phone_number', v)} />
+            <OField
+              label="Base salary / month (ZMW)"
+              type="number"
+              value={form.base_salary ?? ''}
+              onChange={(v) => set('base_salary', v)}
+              error={fieldErrors.base_salary}
+              placeholder="Monthly basic salary"
+              min="0"
+              step="0.01"
+              helper="Used to calculate overtime hourly wage as monthly Base Salary ÷ 208."
+            />
 
-        <div className="form-field">
-          <label htmlFor="op-status">Status</label>
-          <select id="op-status" value={status} onChange={(e) => setStatus(e.target.value)}>
-            {STATUS_OPTIONS.map((s) => (
-              <option key={s} value={s}>
-                {OPERATOR_STATUS_LABEL[s]}
-              </option>
-            ))}
-          </select>
-        </div>
+            <div className="form-field">
+              <label htmlFor="op-status">Status</label>
+              <select id="op-status" value={status} onChange={(e) => setStatus(e.target.value)}>
+                {STATUS_OPTIONS.map((s) => (
+                  <option key={s} value={s}>
+                    {OPERATOR_STATUS_LABEL[s]}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </>
+        )}
 
         <div className="form-field full">
-          <label>Assigned machines</label>
+          <label>Machines assigned to this operator</label>
           {machineOptions.length === 0 ? (
             <span className="field-hint">No available machines to assign.</span>
           ) : (
@@ -663,7 +862,12 @@ function OperatorFormModal({
                     onChange={() => toggleMachine(m.id)}
                     disabled={!isActive}
                   />
-                  <span>{m.machine_number} · {m.machine_type}</span>
+                  <span>
+                    {m.machine_number} · {m.machine_type}
+                    {m.assigned_operator_id && m.assigned_operator_id !== operator?.id
+                      ? ` · currently assigned to ${operators.find((candidate) => candidate.id === m.assigned_operator_id)?.full_name ?? 'another operator'}; selecting will reassign it`
+                      : ''}
+                  </span>
                 </label>
               ))}
             </div>
@@ -671,45 +875,74 @@ function OperatorFormModal({
           {!isActive && <span className="field-hint">Inactive operators are unassigned when saved.</span>}
         </div>
 
-        <OField
-          label="Employment date"
-          type="date"
-          value={form.employment_date ?? ''}
-          onChange={(v) => set('employment_date', v)}
-        />
-        <OField
-          label="Emergency contact"
-          value={form.emergency_contact ?? ''}
-          onChange={(v) => set('emergency_contact', v)}
-        />
-        <OField label="Address" full value={form.address ?? ''} onChange={(v) => set('address', v)} />
-        <OField
-          label="Licence details"
-          full
-          value={form.licence_details ?? ''}
-          onChange={(v) => set('licence_details', v)}
-          placeholder="Licence class, number, expiry…"
-        />
-        <OField
-          label="Certifications"
-          full
-          value={form.certifications ?? ''}
-          onChange={(v) => set('certifications', v)}
-          placeholder="Safety cards, machine-specific tickets…"
-        />
+        {mode !== 'assign' && (
+          <>
+            <OField
+              label="Employment date"
+              type="date"
+              value={form.employment_date ?? ''}
+              onChange={(v) => set('employment_date', v)}
+            />
+            <OField
+              label="Emergency contact"
+              value={form.emergency_contact ?? ''}
+              onChange={(v) => set('emergency_contact', v)}
+            />
+            <OField label="Address" full value={form.address ?? ''} onChange={(v) => set('address', v)} />
+            <OField
+              label="Licence details"
+              full
+              value={form.licence_details ?? ''}
+              onChange={(v) => set('licence_details', v)}
+              placeholder="Licence class, number, expiry…"
+            />
+            <OField
+              label="Certifications"
+              full
+              value={form.certifications ?? ''}
+              onChange={(v) => set('certifications', v)}
+              placeholder="Safety cards, machine-specific tickets…"
+            />
 
-        <div className="form-field checkbox-field full">
-          <input
-            id="op-active"
-            type="checkbox"
-            checked={isActive}
-            onChange={(e) => setIsActive(e.target.checked)}
-          />
-          <label htmlFor="op-active">Active (currently employed)</label>
-        </div>
+            <div className="form-field checkbox-field full">
+              <input
+                id="op-active"
+                type="checkbox"
+                checked={isActive}
+                onChange={(e) => setIsActive(e.target.checked)}
+              />
+              <label htmlFor="op-active">Active (currently employed)</label>
+            </div>
+          </>
+        )}
       </div>
     </Modal>
   )
+}
+
+async function compressProfilePicture(file: File): Promise<Blob> {
+  if (!file.type.startsWith('image/')) throw new Error('Choose an image file for the profile picture.')
+  const bitmap = await createImageBitmap(file)
+  try {
+    for (const [maxDimension, quality] of [[512, 0.72], [384, 0.58]] as const) {
+      const scale = Math.min(1, maxDimension / Math.max(bitmap.width, bitmap.height))
+      const canvas = document.createElement('canvas')
+      canvas.width = Math.max(1, Math.round(bitmap.width * scale))
+      canvas.height = Math.max(1, Math.round(bitmap.height * scale))
+      const context = canvas.getContext('2d')
+      if (!context) throw new Error('Your browser could not process this image.')
+      context.drawImage(bitmap, 0, 0, canvas.width, canvas.height)
+      const compressed = await new Promise<Blob | null>((resolve) =>
+        canvas.toBlob(resolve, 'image/webp', quality),
+      )
+      if (!compressed || compressed.type !== 'image/webp')
+        throw new Error('Your browser could not compress this image to WebP.')
+      if (compressed.size <= 512 * 1024) return compressed
+    }
+    throw new Error('This image is too large after compression. Choose a smaller image.')
+  } finally {
+    bitmap.close()
+  }
 }
 
 function OField({
@@ -721,6 +954,9 @@ function OField({
   placeholder,
   error,
   full,
+  min,
+  step,
+  helper,
 }: {
   label: string
   value: string
@@ -730,6 +966,9 @@ function OField({
   placeholder?: string
   error?: string
   full?: boolean
+  min?: string
+  step?: string
+  helper?: string
 }) {
   return (
     <div className={`form-field ${full ? 'full' : ''} ${error ? 'invalid' : ''}`}>
@@ -737,7 +976,15 @@ function OField({
         {label}
         {required && <span className="req">*</span>}
       </label>
-      <input type={type} value={value} placeholder={placeholder} onChange={(e) => onChange(e.target.value)} />
+      <input
+        type={type}
+        value={value}
+        placeholder={placeholder}
+        min={min}
+        step={step}
+        onChange={(e) => onChange(e.target.value)}
+      />
+      {helper && <span className="field-hint">{helper}</span>}
       {error && <span className="field-error">{error}</span>}
     </div>
   )

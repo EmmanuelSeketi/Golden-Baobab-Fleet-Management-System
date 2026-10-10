@@ -1,24 +1,32 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { AlertTriangle, CalendarDays, CheckCircle2, Download, FileSpreadsheet, Settings2 } from 'lucide-react'
 import { useSupabase } from '@/lib/supabase/use-supabase'
 import { useQuery } from '@/lib/gbi/use-query'
-import { dateTime, money, shortDate, titleCase } from '@/lib/gbi/format'
-import { buildMatrix, exportCsv, exportXlsx, type ExportColumn } from '@/lib/gbi/export'
+import { dateTime, money, shortDate } from '@/lib/gbi/format'
+import { buildMatrix, exportCsv, exportXlsx } from '@/lib/gbi/export'
 import { canManageOvertimeRules, canReviewOvertime, type UserRole } from '@/lib/gbi/roles'
-import { deriveOvertime, pickOvertimeRule, type OvertimeRule, type OvertimeSourceEntry } from '@/lib/gbi/overtime'
+import {
+  deriveOvertime,
+  OVERTIME_MONTHLY_HOURS,
+  overtimeDayMultiplier,
+  pickOvertimeRule,
+  round2,
+  type OvertimeRule,
+  type OvertimeSourceEntry,
+} from '@/lib/gbi/overtime'
 import { DetailGrid, LoadingSpinner, Modal, ModalSection, PageHeading, StatusBadge, ViewState } from '@/components/shared'
 
 // A single overtime line as shown on the page. It is derived live from a daily
-// hour entry : no manual "generate" step and no dependency on rows existing in
-// overtime_entry. A persisted overtime_entry only supplies the reviewed status
-// (and, once recorded, its snapshotted figures).
+// hour entry : a persisted overtime_entry only supplies reviewed status.
 type OtRow = {
   key: string // the source daily_hour_entry id (stable list key)
   persistedId: string | null // overtime_entry id, when the line has been recorded
   operatorId: string | null
   operatorName: string
+  baseSalary: number | null
+  hourlyWage: number
   machineId: string
   machineNumber: string
   entryDate: string
@@ -40,14 +48,14 @@ const RULE_SELECT =
 
 // Source daily entries (the single source of truth for overtime hours).
 const ENTRY_SELECT =
-  'id,entry_date,operator_id,total_hours,operator:operator_id(full_name),machine:machine_id(id,machine_number)'
+  'id,entry_date,operator_id,total_hours,operator:operator_id(full_name,base_salary),machine:machine_id(id,machine_number)'
 
 type EntryRow = {
   id: string
   entry_date: string
   operator_id: string | null
   total_hours: number
-  operator: { full_name: string } | null
+  operator: { full_name: string; base_salary: number | null } | null
   machine: { id: string; machine_number: string } | null
 }
 
@@ -67,22 +75,11 @@ function isoDate(d: Date): string {
   return local.toISOString().slice(0, 10)
 }
 
-const EXPORT_COLUMNS: ExportColumn<OtRow>[] = [
-  { header: 'Entry date', value: (r) => r.entryDate },
-  { header: 'Operator', value: (r) => r.operatorName },
-  { header: 'Machine', value: (r) => r.machineNumber },
-  { header: 'Overtime rule', value: (r) => r.ruleName ?? 'Default (no rule configured)' },
-  { header: 'Standard hours', value: (r) => r.standardHours },
-  { header: 'Overtime hours', value: (r) => r.overtimeHours },
-  { header: 'Overtime pay', value: (r) => r.overtimePay },
-  { header: 'Status', value: (r) => (r.reviewed ? 'Reviewed' : 'Pending') },
-]
-
 export function OvertimeView({ role, userId }: { role: UserRole; userId: string }) {
   const supabase = useSupabase()
+  const currentDate = isoDate(new Date())
+  const [selectedDate, setSelectedDate] = useState(currentDate)
   const [filter, setFilter] = useState<(typeof FILTERS)[number]>('all')
-  // Single-day filter, defaulting to today. Empty string means "All days".
-  const [date, setDate] = useState<string>(isoDate(new Date()))
   const [machineFilter, setMachineFilter] = useState('')
   const [operatorFilter, setOperatorFilter] = useState('')
   const [selected, setSelected] = useState<OtRow | null>(null)
@@ -98,11 +95,12 @@ export function OvertimeView({ role, userId }: { role: UserRole; userId: string 
         .from('daily_hour_entry')
         .select(ENTRY_SELECT)
         .not('operator_id', 'is', null)
+        .eq('entry_date', selectedDate)
         .order('entry_date', { ascending: false }) as unknown as PromiseLike<{
         data: EntryRow[] | null
         error: unknown
       }>,
-    [],
+    [selectedDate],
   )
   const rulesQ = useQuery<OvertimeRule[]>(
     () =>
@@ -126,9 +124,16 @@ export function OvertimeView({ role, userId }: { role: UserRole; userId: string 
     [],
   )
 
-  const status = entries.status
+  const status =
+    entries.status === 'error' || rulesQ.status === 'error' || persisted.status === 'error'
+      ? 'error'
+      : entries.status === 'loading' || rulesQ.status === 'loading' || persisted.status === 'loading'
+        ? 'loading'
+        : 'ready'
+  const loadError = entries.error || rulesQ.error || persisted.error
   const reload = () => {
     entries.reload()
+    rulesQ.reload()
     persisted.reload()
   }
 
@@ -143,7 +148,10 @@ export function OvertimeView({ role, userId }: { role: UserRole; userId: string 
     const out: OtRow[] = []
     for (const e of list) {
       const rule = pickOvertimeRule(rules, e.entry_date)
-      const derived = deriveOvertime(e as OvertimeSourceEntry, rule)
+      const derived = deriveOvertime(
+        { ...e, base_salary: e.operator?.base_salary ?? null } as OvertimeSourceEntry,
+        rule,
+      )
       if (!derived) continue
       const p = byEntry.get(e.id) ?? null
       out.push({
@@ -151,16 +159,18 @@ export function OvertimeView({ role, userId }: { role: UserRole; userId: string 
         persistedId: p?.id ?? null,
         operatorId: e.operator_id,
         operatorName: e.operator?.full_name ?? 'N/A',
+        baseSalary: e.operator?.base_salary == null ? null : Number(e.operator.base_salary),
+        hourlyWage: (Number(e.operator?.base_salary) || 0) / OVERTIME_MONTHLY_HOURS,
         machineId: e.machine?.id ?? '',
         machineNumber: e.machine?.machine_number ?? 'N/A',
         entryDate: e.entry_date,
         ruleId: derived.ruleId,
         ruleName: derived.ruleName,
         weekdayMultiplier: derived.weekdayMultiplier,
-        // Prefer recorded figures once a line has been reviewed/snapshotted.
-        standardHours: p?.standard_hours != null ? Number(p.standard_hours) : derived.standardHours,
-        overtimeHours: p?.overtime_hours != null ? Number(p.overtime_hours) : derived.overtimeHours,
-        overtimePay: p?.overtime_pay != null ? Number(p.overtime_pay) : derived.overtimePay,
+        // Recalculate with the current salary, including for previously reviewed lines.
+        standardHours: derived.standardHours,
+        overtimeHours: derived.overtimeHours,
+        overtimePay: derived.overtimePay,
         reviewed: p?.reviewed ?? false,
         reviewedAt: p?.reviewed_at ?? null,
         hasRealRule: derived.hasRealRule,
@@ -171,12 +181,11 @@ export function OvertimeView({ role, userId }: { role: UserRole; userId: string 
 
   const rows = useMemo(() => {
     let all = allRows
-    if (date) all = all.filter((r) => r.entryDate === date)
     if (machineFilter) all = all.filter((r) => r.machineId === machineFilter)
     if (operatorFilter) all = all.filter((r) => r.operatorId === operatorFilter)
     if (filter !== 'all') all = all.filter((r) => (filter === 'reviewed' ? r.reviewed : !r.reviewed))
     return all
-  }, [allRows, filter, date, machineFilter, operatorFilter])
+  }, [allRows, filter, machineFilter, operatorFilter])
 
   const machineOptions = useMemo(
     () => Array.from(new Map(allRows.filter((row) => row.machineId).map((row) => [row.machineId, row.machineNumber])).entries())
@@ -189,15 +198,14 @@ export function OvertimeView({ role, userId }: { role: UserRole; userId: string 
     [allRows],
   )
 
-  const totalPay = rows.reduce((s, r) => s + r.overtimePay, 0)
-  const totalHours = rows.reduce((s, r) => s + r.overtimeHours, 0)
   const noRuleAny = allRows.some((r) => !r.hasRealRule)
+  const noSalaryAny = allRows.some((r) => r.baseSalary == null)
 
   return (
     <div className="page-wrap">
       <PageHeading
         title="Operator Overtime"
-        description="Overtime is derived automatically from daily hours worked beyond standard hours, pending management review."
+        description="Overtime is calculated from submitted daily hours using current monthly Base Salary ÷ 208, at 1.5× on weekdays and 2× on weekends."
         action={
           canRules ? (
             <div className="modal-foot-actions">
@@ -210,16 +218,95 @@ export function OvertimeView({ role, userId }: { role: UserRole; userId: string 
         }
       />
 
-      <OvertimeExportBar date={date} setDate={setDate} rows={rows} ready={status === 'ready'} />
+      <DailyOvertimeSection
+        status={status}
+        error={loadError}
+        reload={reload}
+        rows={rows}
+        filter={filter}
+        setFilter={setFilter}
+        selectedDate={selectedDate}
+        currentDate={currentDate}
+        setSelectedDate={setSelectedDate}
+        machineFilter={machineFilter}
+        setMachineFilter={setMachineFilter}
+        operatorFilter={operatorFilter}
+        setOperatorFilter={setOperatorFilter}
+        machineOptions={machineOptions}
+        operatorOptions={operatorOptions}
+        noRuleAny={noRuleAny}
+        noSalaryAny={noSalaryAny}
+        onSelect={setSelected}
+      />
 
-      {noRuleAny && status === 'ready' && (
-        <p className="form-info" style={{ marginTop: 12 }}>
-          <AlertTriangle size={14} />
-          Some overtime is shown using default hours because no overtime rule covers those dates. Add a rule to
-          calculate overtime pay{canRules ? ' via “Overtime rules”.' : '.'}
-        </p>
+      <MonthlyOvertimePayroll
+        rules={rulesQ.data ?? []}
+        rulesReady={rulesQ.status === 'ready'}
+        rulesError={rulesQ.error}
+      />
+
+      <OvertimeDetailModal
+        entry={selected}
+        canReview={canReview}
+        userId={userId}
+        onClose={() => setSelected(null)}
+        onReviewed={() => {
+          setSelected(null)
+          reload()
+        }}
+      />
+
+      {canRules && (
+        <OvertimeRulesModal open={managingRules} userId={userId} onClose={() => setManagingRules(false)} />
       )}
+    </div>
+  )
+}
 
+function DailyOvertimeSection({
+  status,
+  error,
+  reload,
+  rows,
+  filter,
+  setFilter,
+  selectedDate,
+  currentDate,
+  setSelectedDate,
+  machineFilter,
+  setMachineFilter,
+  operatorFilter,
+  setOperatorFilter,
+  machineOptions,
+  operatorOptions,
+  noRuleAny,
+  noSalaryAny,
+  onSelect,
+}: {
+  status: 'loading' | 'ready' | 'error'
+  error: string
+  reload: () => void
+  rows: OtRow[]
+  filter: (typeof FILTERS)[number]
+  setFilter: (filter: (typeof FILTERS)[number]) => void
+  selectedDate: string
+  currentDate: string
+  setSelectedDate: (date: string) => void
+  machineFilter: string
+  setMachineFilter: (machineId: string) => void
+  operatorFilter: string
+  setOperatorFilter: (operatorId: string) => void
+  machineOptions: [string, string][]
+  operatorOptions: [string, string][]
+  noRuleAny: boolean
+  noSalaryAny: boolean
+  onSelect: (row: OtRow) => void
+}) {
+  const totalPay = rows.reduce((sum, row) => sum + row.overtimePay, 0)
+  const totalHours = rows.reduce((sum, row) => sum + row.overtimeHours, 0)
+
+  return (
+    <section className="daily-overtime-section">
       <div className="hours-summary">
         <div>
           <span>Entries</span>
@@ -235,8 +322,12 @@ export function OvertimeView({ role, userId }: { role: UserRole; userId: string 
         </div>
         <div>
           <span>Pending review</span>
-          <b className={rows.some((r) => !r.reviewed) ? 'danger-text' : ''}>
-            {status === 'loading' ? <LoadingSpinner small /> : status === 'ready' ? rows.filter((r) => !r.reviewed).length : 'N/A'}
+          <b className={rows.some((row) => !row.reviewed) ? 'danger-text' : ''}>
+            {status === 'loading'
+              ? <LoadingSpinner small />
+              : status === 'ready'
+                ? rows.filter((row) => !row.reviewed).length
+                : 'N/A'}
           </b>
         </div>
         <div>
@@ -245,46 +336,72 @@ export function OvertimeView({ role, userId }: { role: UserRole; userId: string 
         </div>
       </div>
 
-      <div className="filter-row" style={{ marginTop: 14 }}>
-        {FILTERS.map((f) => (
-          <button key={f} className={`chip ${filter === f ? 'chip-active' : ''}`} onClick={() => setFilter(f)}>
-            {f[0].toUpperCase() + f.slice(1)}
-          </button>
-        ))}
-      </div>
-      <div className="filter-row" style={{ marginTop: 10 }}>
-        <label className="form-field">
-          <span>Machine</span>
-          <select value={machineFilter} onChange={(event) => setMachineFilter(event.target.value)}>
-            <option value="">All machines</option>
-            {machineOptions.map(([id, machineNumber]) => (
-              <option key={id} value={id}>{machineNumber}</option>
-            ))}
-          </select>
+      {(noRuleAny || noSalaryAny) && status === 'ready' && (
+        <p className="form-info" style={{ marginTop: 12 }}>
+          <AlertTriangle size={14} />
+          {noRuleAny &&
+            'Some entries use the default 8-hour daily threshold because no overtime rule covers their dates. '}
+          {noSalaryAny && 'Entries without a Base Salary show zero overtime pay until one is entered. '}
+          Weekdays use 1.5× and Saturdays/Sundays use 2×; public holidays use the weekday rate unless they fall on a weekend.
+        </p>
+      )}
+
+      <div className="overtime-filters">
+        <label className="form-field overtime-date-filter">
+          <span>Day</span>
+          <input
+            type="date"
+            value={selectedDate}
+            max={currentDate}
+            onChange={(event) => setSelectedDate(event.target.value)}
+            aria-label="Overtime day"
+          />
         </label>
-        <label className="form-field">
-          <span>Operator</span>
-          <select value={operatorFilter} onChange={(event) => setOperatorFilter(event.target.value)}>
-            <option value="">All operators</option>
-            {operatorOptions.map(([id, name]) => (
-              <option key={id} value={id}>{name}</option>
-            ))}
-          </select>
-        </label>
+        <div className="overtime-status-filters" role="group" aria-label="Filter overtime by review status">
+          {FILTERS.map((value) => (
+            <button
+              key={value}
+              className={`chip ${filter === value ? 'chip-active' : ''}`}
+              onClick={() => setFilter(value)}
+            >
+              {value[0].toUpperCase() + value.slice(1)}
+            </button>
+          ))}
+        </div>
+        <select
+          className="overtime-select-filter"
+          aria-label="Filter by machine"
+          value={machineFilter}
+          onChange={(event) => setMachineFilter(event.target.value)}
+        >
+          <option value="">All machines</option>
+          {machineOptions.map(([id, machineNumber]) => (
+            <option key={id} value={id}>{machineNumber}</option>
+          ))}
+        </select>
+        <select
+          className="overtime-select-filter"
+          aria-label="Filter by operator"
+          value={operatorFilter}
+          onChange={(event) => setOperatorFilter(event.target.value)}
+        >
+          <option value="">All operators</option>
+          {operatorOptions.map(([id, name]) => (
+            <option key={id} value={id}>{name}</option>
+          ))}
+        </select>
       </div>
 
       <div className="panel">
         <ViewState
           status={status}
-          error={entries.error}
+          error={error}
           isEmpty={rows.length === 0}
           title="overtime"
           emptyText={
             filter === 'all'
-              ? date
-                ? 'No overtime on this day. Pick another date or choose "All days".'
-                : 'No overtime recorded yet. Overtime appears automatically once a daily entry exceeds standard hours.'
-              : `No ${filter} overtime entries.`
+              ? 'No overtime recorded for this day. Overtime appears when a daily entry exceeds standard hours.'
+              : `No ${filter} overtime entries for this day.`
           }
           onRetry={reload}
         >
@@ -302,22 +419,20 @@ export function OvertimeView({ role, userId }: { role: UserRole; userId: string 
                 </tr>
               </thead>
               <tbody>
-                {rows.map((r) => (
-                  <tr key={r.key} className="clickable-row" onClick={() => setSelected(r)}>
+                {rows.map((row) => (
+                  <tr key={row.key} className="clickable-row" onClick={() => onSelect(row)}>
                     <td>
-                      <b>{r.operatorName}</b>
-                      <div className="muted-cell">{r.ruleName ?? 'Default rate'}</div>
+                      <b>{row.operatorName}</b>
+                      <div className="muted-cell">{row.ruleName ?? 'Default rate'}</div>
                     </td>
-                    <td>{shortDate(r.entryDate)}</td>
-                    <td>{r.machineNumber}</td>
-                    <td>{r.standardHours.toFixed(1)} h</td>
+                    <td>{shortDate(row.entryDate)}</td>
+                    <td>{row.machineNumber}</td>
+                    <td>{row.standardHours.toFixed(1)} h</td>
+                    <td><b>{row.overtimeHours.toFixed(1)} h</b></td>
+                    <td>{money(row.overtimePay)}</td>
                     <td>
-                      <b>{r.overtimeHours.toFixed(1)} h</b>
-                    </td>
-                    <td>{money(r.overtimePay)}</td>
-                    <td>
-                      <StatusBadge tone={r.reviewed ? 'green' : 'amber'}>
-                        {r.reviewed ? 'Reviewed' : 'Pending'}
+                      <StatusBadge tone={row.reviewed ? 'green' : 'amber'}>
+                        {row.reviewed ? 'Reviewed' : 'Pending'}
                       </StatusBadge>
                     </td>
                   </tr>
@@ -327,22 +442,7 @@ export function OvertimeView({ role, userId }: { role: UserRole; userId: string 
           </div>
         </ViewState>
       </div>
-
-      <OvertimeDetailModal
-        entry={selected}
-        canReview={canReview}
-        userId={userId}
-        onClose={() => setSelected(null)}
-        onReviewed={() => {
-          setSelected(null)
-          reload()
-        }}
-      />
-
-      {canRules && (
-        <OvertimeRulesModal open={managingRules} userId={userId} onClose={() => setManagingRules(false)} />
-      )}
-    </div>
+    </section>
   )
 }
 
@@ -401,7 +501,7 @@ function OvertimeDetailModal({
       upErr = res.error
     } else {
       setBusy(false)
-      setError('Add an overtime rule covering this date before approving, so pay can be recorded.')
+      setError('Add an overtime rule covering this date before marking it reviewed.')
       return
     }
     setBusy(false)
@@ -454,6 +554,8 @@ function OvertimeDetailModal({
           ['Entry date', shortDate(entry.entryDate)],
           ['Overtime rule', entry.ruleName ?? 'Default (no rule configured)'],
           ['Day multiplier', `${entry.weekdayMultiplier}×`],
+          ['Current base salary', entry.baseSalary == null ? 'Not set' : money(entry.baseSalary)],
+          ['Hourly wage (salary ÷ 208)', money(entry.hourlyWage)],
           ['Standard hours', `${entry.standardHours.toFixed(1)} h`],
           ['Overtime hours', `${entry.overtimeHours.toFixed(1)} h`],
           ['Overtime pay', money(entry.overtimePay)],
@@ -497,7 +599,7 @@ function OvertimeRulesModal({ open, userId, onClose }: { open: boolean; userId: 
         onClose={onClose}
         eyebrow="Configuration"
         title="Overtime rules"
-        subtitle="Effective-dated multipliers used to calculate operator overtime pay."
+        subtitle="Effective-dated daily standard hours. Pay uses the operator’s current monthly Base Salary divided by 208."
         footer={
           <div className="footer-actions">
             <button className="button button-secondary" onClick={onClose}>
@@ -529,12 +631,10 @@ function OvertimeRulesModal({ open, userId, onClose }: { open: boolean; userId: 
                   <b>{r.name}</b>
                   <span>
                     {shortDate(r.effective_from)} → {r.effective_to ? shortDate(r.effective_to) : 'current'}
-                    {r.operator_category ? ` · ${titleCase(r.operator_category)}` : ''}
                   </span>
                 </div>
                 <div className="stack-meta">
-                  {r.weekday_rate_multiplier ?? 'N/A'}× wk
-                  {r.base_hourly_rate ? ` · ${money(r.base_hourly_rate)}/h` : ''}
+                  {r.standard_hours_per_day ?? 8} h/day
                   {!r.effective_to && <StatusBadge tone="green">Active</StatusBadge>}
                 </div>
               </div>
@@ -576,7 +676,7 @@ function OvertimeRuleFormModal({
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
 
   useEffect(() => {
-    setForm({ standard_hours_per_day: '8', weekday_rate_multiplier: '1.5' })
+    setForm({ standard_hours_per_day: '8' })
     setFieldErrors({})
     setFormError('')
   }, [])
@@ -589,6 +689,9 @@ function OvertimeRuleFormModal({
     const errors: Record<string, string> = {}
     if (!form.name?.trim()) errors.name = 'Rule name is required.'
     if (!form.effective_from) errors.effective_from = 'Effective-from date is required.'
+    const standardHours = form.standard_hours_per_day?.trim()
+    if (standardHours && (!Number.isFinite(Number(standardHours)) || Number(standardHours) <= 0))
+      errors.standard_hours_per_day = 'Standard hours must be greater than zero.'
     if (openRule && form.effective_from && form.effective_from <= openRule.effective_from)
       errors.effective_from = `Must be after the current rule's start (${shortDate(openRule.effective_from)}).`
     setFieldErrors(errors)
@@ -601,12 +704,12 @@ function OvertimeRuleFormModal({
       effective_from: form.effective_from,
       effective_to: null,
       standard_hours_per_day: num('standard_hours_per_day') ?? 8,
-      weekday_rate_multiplier: num('weekday_rate_multiplier') ?? 1.5,
-      saturday_rate_multiplier: num('saturday_rate_multiplier'),
-      sunday_rate_multiplier: num('sunday_rate_multiplier'),
-      public_holiday_rate_multiplier: num('public_holiday_rate_multiplier'),
-      operator_category: form.operator_category?.trim() ? form.operator_category.trim() : null,
-      base_hourly_rate: num('base_hourly_rate'),
+      operator_category: null,
+      base_hourly_rate: null,
+      weekday_rate_multiplier: 1.5,
+      saturday_rate_multiplier: 2,
+      sunday_rate_multiplier: 2,
+      public_holiday_rate_multiplier: 1.5,
       created_by: userId,
     }
 
@@ -647,7 +750,7 @@ function OvertimeRuleFormModal({
       subtitle={
         openRule
           ? `The current rule (from ${shortDate(openRule.effective_from)}) will be closed the day before this starts.`
-          : 'Set the multipliers that apply from the effective date onward.'
+          : 'Set the daily standard hours from this effective date onward. The payroll formula uses a fixed 1.5× weekday and 2× weekend rate.'
       }
       footer={
         <div className="footer-actions">
@@ -669,13 +772,19 @@ function OvertimeRuleFormModal({
         )}
         <OtField label="Rule name" required value={form.name ?? ''} onChange={(v) => set('name', v)} error={fieldErrors.name} full placeholder="e.g. Standard overtime 2026" />
         <OtField label="Effective from" type="date" required value={form.effective_from ?? ''} onChange={(v) => set('effective_from', v)} error={fieldErrors.effective_from} />
-        <OtField label="Standard hours / day" type="number" value={form.standard_hours_per_day ?? ''} onChange={(v) => set('standard_hours_per_day', v)} placeholder="8" />
-        <OtField label="Base hourly rate" type="number" value={form.base_hourly_rate ?? ''} onChange={(v) => set('base_hourly_rate', v)} placeholder="Used to compute pay" />
-        <OtField label="Weekday multiplier" type="number" value={form.weekday_rate_multiplier ?? ''} onChange={(v) => set('weekday_rate_multiplier', v)} placeholder="1.5" />
-        <OtField label="Saturday multiplier" type="number" value={form.saturday_rate_multiplier ?? ''} onChange={(v) => set('saturday_rate_multiplier', v)} />
-        <OtField label="Sunday multiplier" type="number" value={form.sunday_rate_multiplier ?? ''} onChange={(v) => set('sunday_rate_multiplier', v)} />
-        <OtField label="Public holiday multiplier" type="number" value={form.public_holiday_rate_multiplier ?? ''} onChange={(v) => set('public_holiday_rate_multiplier', v)} />
-        <OtField label="Operator category (optional)" value={form.operator_category ?? ''} onChange={(v) => set('operator_category', v)} placeholder="Blank = all operators" />
+        <OtField
+          label="Standard hours / day"
+          type="number"
+          value={form.standard_hours_per_day ?? ''}
+          onChange={(v) => set('standard_hours_per_day', v)}
+          error={fieldErrors.standard_hours_per_day}
+          placeholder="8"
+          min="0.01"
+          step="0.25"
+        />
+        <p className="field-hint full">
+          Hourly wage = current monthly Base Salary ÷ 208. Weekday overtime is 1.5× and Saturday/Sunday overtime is 2×. Public holidays use the weekday rate unless they fall on a weekend.
+        </p>
       </div>
     </Modal>
   )
@@ -690,6 +799,8 @@ function OtField({
   placeholder,
   error,
   full,
+  min,
+  step,
 }: {
   label: string
   value: string
@@ -699,6 +810,8 @@ function OtField({
   placeholder?: string
   error?: string
   full?: boolean
+  min?: string
+  step?: string
 }) {
   return (
     <div className={`form-field ${full ? 'full' : ''} ${error ? 'invalid' : ''}`}>
@@ -706,58 +819,173 @@ function OtField({
         {label}
         {required && <span className="req">*</span>}
       </label>
-      <input type={type} value={value} placeholder={placeholder} onChange={(e) => onChange(e.target.value)} />
+      <input
+        type={type}
+        value={value}
+        placeholder={placeholder}
+        min={min}
+        step={step}
+        onChange={(e) => onChange(e.target.value)}
+      />
       {error && <span className="field-error">{error}</span>}
     </div>
   )
 }
 
-// ---------------------------------------------------------------------------
-// Single-day filter + CSV/Excel export for the visible overtime entries
-// ---------------------------------------------------------------------------
+type PayrollSummaryRow = {
+  operatorId: string
+  operatorName: string
+  baseSalary: number | null
+  weekdayHours: number
+  weekendHours: number
+  totalHours: number
+  totalPay: number
+}
 
-function OvertimeExportBar({
-  date,
-  setDate,
-  rows,
-  ready,
+type PayrollEntry = {
+  id: string
+  entry_date: string
+  operator_id: string | null
+  total_hours: number
+  operator: { full_name: string; base_salary: number | null } | null
+}
+
+function MonthlyOvertimePayroll({
+  rules,
+  rulesReady,
+  rulesError,
 }: {
-  date: string
-  setDate: (v: string) => void
-  rows: OtRow[]
-  ready: boolean
+  rules: OvertimeRule[]
+  rulesReady: boolean
+  rulesError: string
 }) {
+  const supabase = useSupabase()
+  const today = isoDate(new Date())
+  const [fromDate, setFromDate] = useState(`${today.slice(0, 7)}-01`)
+  const [toDate, setToDate] = useState(today)
   const [busy, setBusy] = useState<null | 'csv' | 'xlsx'>(null)
   const [message, setMessage] = useState<{ text: string; error: boolean } | null>(null)
-  const dateRef = useRef<HTMLInputElement>(null)
+  const invalidRange = !fromDate || !toDate || fromDate > toDate
 
-  function openPicker(ref: React.RefObject<HTMLInputElement | null>) {
-    try {
-      ref.current?.showPicker?.()
-    } catch {
-      /* showPicker unsupported/blocked : focusing the input still works */
+  const payrollEntries = useQuery<PayrollEntry[]>(
+    async () => {
+      if (invalidRange) return { data: [], error: null }
+      const pageSize = 500
+      const result: PayrollEntry[] = []
+      for (let offset = 0; ; offset += pageSize) {
+        const page = await supabase
+          .from('daily_hour_entry')
+          .select('id,entry_date,operator_id,total_hours,operator:operator_id(full_name,base_salary)')
+          .not('operator_id', 'is', null)
+          .gte('entry_date', fromDate)
+          .lte('entry_date', toDate)
+          .order('entry_date')
+          .order('id')
+          .range(offset, offset + pageSize - 1) as unknown as {
+          data: PayrollEntry[] | null
+          error: unknown
+        }
+        if (page.error) return { data: null, error: page.error }
+        const batch = page.data ?? []
+        result.push(...batch)
+        if (batch.length < pageSize) break
+      }
+      return { data: result, error: null }
+    },
+    [fromDate, toDate],
+  )
+
+  const periodRows = useMemo<PayrollSummaryRow[]>(() => {
+    const byOperator = new Map<string, PayrollSummaryRow>()
+    for (const entry of payrollEntries.data ?? []) {
+      const derived = deriveOvertime(
+        { ...entry, base_salary: entry.operator?.base_salary ?? null },
+        pickOvertimeRule(rules, entry.entry_date),
+      )
+      if (!derived) continue
+      const key = entry.operator_id ?? entry.operator?.full_name ?? 'Unknown operator'
+      const baseSalary = entry.operator?.base_salary == null ? null : Number(entry.operator.base_salary)
+      const summary = byOperator.get(key) ?? {
+        operatorId: key,
+        operatorName: entry.operator?.full_name ?? 'N/A',
+        baseSalary,
+        weekdayHours: 0,
+        weekendHours: 0,
+        totalHours: 0,
+        totalPay: 0,
+      }
+      if (baseSalary != null) summary.baseSalary = baseSalary
+      if (overtimeDayMultiplier(entry.entry_date) === 2) summary.weekendHours += derived.overtimeHours
+      else summary.weekdayHours += derived.overtimeHours
+      summary.totalHours += derived.overtimeHours
+      summary.totalPay += derived.overtimePay
+      byOperator.set(key, summary)
     }
-  }
+    return Array.from(byOperator.values())
+      .map((row) => ({
+        ...row,
+        weekdayHours: round2(row.weekdayHours),
+        weekendHours: round2(row.weekendHours),
+        totalHours: round2(row.totalHours),
+        totalPay: round2(row.totalPay),
+      }))
+      .sort((a, b) => a.operatorName.localeCompare(b.operatorName))
+  }, [payrollEntries.data, rules])
+
+  const missingSalaryCount = periodRows.filter((row) => row.baseSalary == null).length
+  const ready = payrollEntries.status === 'ready' && rulesReady
+  const totals = periodRows.reduce(
+    (sum, row) => ({
+      weekdayHours: sum.weekdayHours + row.weekdayHours,
+      weekendHours: sum.weekendHours + row.weekendHours,
+      totalHours: sum.totalHours + row.totalHours,
+      totalPay: sum.totalPay + row.totalPay,
+    }),
+    { weekdayHours: 0, weekendHours: 0, totalHours: 0, totalPay: 0 },
+  )
 
   async function runExport(kind: 'csv' | 'xlsx') {
-    if (rows.length === 0) {
+    if (invalidRange || periodRows.length === 0) {
       setMessage({
-        text: date ? 'No overtime entries on this date to export.' : 'No overtime entries to export.',
+        text: invalidRange
+          ? 'Choose a valid start and end date.'
+          : 'No overtime entries in this period to export.',
         error: true,
       })
       return
     }
     setBusy(kind)
     setMessage(null)
-    const { headers, rows: matrix } = buildMatrix(rows, EXPORT_COLUMNS)
-    const base = `operator-overtime_${date || 'all-days'}`
+    const exportRows = [
+      ...periodRows.map((row) => [
+        row.operatorName,
+        row.baseSalary ?? '',
+        fromDate,
+        toDate,
+        row.baseSalary == null ? '' : round2(row.baseSalary / OVERTIME_MONTHLY_HOURS),
+        row.weekdayHours,
+        row.weekendHours,
+        row.totalHours,
+        row.totalPay,
+      ]),
+      ['TOTAL', '', fromDate, toDate, '', round2(totals.weekdayHours), round2(totals.weekendHours), round2(totals.totalHours), round2(totals.totalPay)],
+    ]
+    const headers = [
+      'Operator',
+      'Current base salary (ZMW/month)',
+      'Period start',
+      'Period end',
+      'Hourly wage (ZMW/hour; base salary / 208)',
+      'Weekday overtime hours',
+      'Weekend overtime hours',
+      'Total overtime hours',
+      'Overtime pay (ZMW)',
+    ]
+    const filename = `overtime-payroll_${fromDate}_${toDate}`
     try {
-      if (kind === 'csv') exportCsv(`${base}.csv`, headers, matrix)
-      else await exportXlsx(`${base}.xlsx`, headers, matrix, 'Overtime')
-      setMessage({
-        text: `Exported ${rows.length} ${rows.length === 1 ? 'entry' : 'entries'} (${kind.toUpperCase()}).`,
-        error: false,
-      })
+      if (kind === 'csv') exportCsv(`${filename}.csv`, headers, exportRows)
+      else await exportXlsx(`${filename}.xlsx`, headers, exportRows, 'Payroll summary')
+      setMessage({ text: `Exported overtime payroll for ${periodRows.length} operators.`, error: false })
     } catch {
       setMessage({ text: 'Could not generate the file. Please try again.', error: true })
     }
@@ -765,44 +993,136 @@ function OvertimeExportBar({
   }
 
   return (
-    <div className="export-bar">
+    <div className="export-bar monthly-payroll-bar">
       <div className="export-title">
-        <b>Export overtime</b>
-        <span>Exports exactly the entries shown for the selected day.</span>
+        <b>Monthly payroll consolidation</b>
+        <span>
+          Summarizes daily-hour overtime within the selected dates, using each operator’s current Base Salary ÷ 208.
+        </span>
       </div>
-      <div className="range-field overtime-day-filter">
-        <span className="range-label">Day</span>
-        <label className="date-control" onClick={() => openPicker(dateRef)}>
+      <div className="range-field">
+        <span className="range-label">From</span>
+        <label className="date-control">
           <CalendarDays size={15} />
           <input
-            ref={dateRef}
             type="date"
-            value={date}
-            max={isoDate(new Date())}
-            onChange={(e) => setDate(e.target.value)}
-            aria-label="Overtime day"
+            value={fromDate}
+            max={today}
+            onChange={(event) => setFromDate(event.target.value)}
+            aria-label="Payroll period start"
           />
         </label>
-        <button
-          type="button"
-          className={`chip ${date ? '' : 'chip-active'}`}
-          onClick={() => setDate(date ? '' : isoDate(new Date()))}
-          aria-pressed={!date}
-          style={{ marginLeft: 8 }}
-        >
-          {date ? 'All days' : 'All days ✓'}
-        </button>
+      </div>
+      <div className="range-field">
+        <span className="range-label">To</span>
+        <label className="date-control">
+          <CalendarDays size={15} />
+          <input
+            type="date"
+            value={toDate}
+            min={fromDate || undefined}
+            max={today}
+            onChange={(event) => setToDate(event.target.value)}
+            aria-label="Payroll period end"
+          />
+        </label>
       </div>
       <div className="export-actions">
-        <button className="button button-secondary" onClick={() => runExport('csv')} disabled={busy !== null || !ready}>
+        <button
+          className="button button-secondary"
+          onClick={() => runExport('csv')}
+          disabled={busy !== null || !ready || invalidRange}
+        >
           <Download size={14} />
           {busy === 'csv' ? 'Exporting…' : 'CSV'}
         </button>
-        <button className="button button-primary" onClick={() => runExport('xlsx')} disabled={busy !== null || !ready}>
+        <button
+          className="button button-primary"
+          onClick={() => runExport('xlsx')}
+          disabled={busy !== null || !ready || invalidRange}
+        >
           <FileSpreadsheet size={14} />
           {busy === 'xlsx' ? 'Exporting…' : 'Excel'}
         </button>
       </div>
+      {missingSalaryCount > 0 && (
+        <p className="export-msg error">
+          {missingSalaryCount} operator{missingSalaryCount === 1 ? '' : 's'} with overtime in this period have no Base Salary; their pay is shown as zero.
+        </p>
+      )}
+      {payrollEntries.status === 'error' && (
+        <p className="export-msg error">
+          Could not load daily hours for payroll consolidation. {payrollEntries.error}
+          <button className="button button-secondary retry-button" onClick={payrollEntries.reload}>
+            Try again
+          </button>
+        </p>
+      )}
+      {rulesError && (
+        <p className="export-msg error">
+          Could not load overtime rules for payroll consolidation. {rulesError}
+        </p>
+      )}
+      {payrollEntries.status === 'loading' && (
+        <p className="export-msg">Loading daily hours for the selected payroll period…</p>
+      )}
+      {ready && (
+        <>
+          <p className="export-msg">
+            Checked {payrollEntries.data?.length ?? 0} submitted daily-hour entr
+            {(payrollEntries.data?.length ?? 0) === 1 ? 'y' : 'ies'} from {shortDate(fromDate)} to {shortDate(toDate)}.
+          </p>
+          {periodRows.length > 0 ? (
+            <div className="table-scroll">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Operator</th>
+                    <th>Base salary / month</th>
+                    <th>Hourly wage</th>
+                    <th>Weekday OT</th>
+                    <th>Weekend OT</th>
+                    <th>Total OT hours</th>
+                    <th>Overtime pay</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {periodRows.map((row) => (
+                    <tr key={row.operatorId}>
+                      <td><b>{row.operatorName}</b></td>
+                      <td>{row.baseSalary == null ? 'Not set' : money(row.baseSalary)}</td>
+                      <td>
+                        {row.baseSalary == null
+                          ? 'N/A'
+                          : money(round2(row.baseSalary / OVERTIME_MONTHLY_HOURS))}
+                      </td>
+                      <td>{row.weekdayHours.toFixed(2)} h</td>
+                      <td>{row.weekendHours.toFixed(2)} h</td>
+                      <td>{row.totalHours.toFixed(2)} h</td>
+                      <td><b>{money(row.totalPay)}</b></td>
+                    </tr>
+                  ))}
+                  <tr>
+                    <td><b>Total</b></td>
+                    <td />
+                    <td />
+                    <td><b>{round2(totals.weekdayHours).toFixed(2)} h</b></td>
+                    <td><b>{round2(totals.weekendHours).toFixed(2)} h</b></td>
+                    <td><b>{round2(totals.totalHours).toFixed(2)} h</b></td>
+                    <td><b>{money(round2(totals.totalPay))}</b></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <p className="export-msg">
+              {(payrollEntries.data?.length ?? 0) === 0
+                ? 'No submitted daily-hour entries were found for these dates.'
+                : 'Daily-hour entries were found, but none exceeded their daily standard-hours threshold. Check the overtime rules if you expected overtime.'}
+            </p>
+          )}
+        </>
+      )}
       {message && <p className={`export-msg ${message.error ? 'error' : ''}`}>{message.text}</p>}
     </div>
   )
