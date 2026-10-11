@@ -28,7 +28,7 @@ export function SettingsView({ userId }: { userId: string }) {
     <div className="page-wrap">
       <PageHeading
         title="Settings & Backup"
-        description="Manage user roles, system configuration and data exports. Administrator access only."
+        description="User roles, system settings and data backups."
       />
 
       <div className="filter-row">

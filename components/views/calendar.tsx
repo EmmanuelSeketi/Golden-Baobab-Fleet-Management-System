@@ -204,7 +204,7 @@ export function CalendarView() {
     <div className="page-wrap">
       <PageHeading
         title="Calendar"
-        description="Scheduled services, logged repairs and machine deployments across the fleet, by month."
+        description="Services, repairs and machine deployments by month."
       />
 
       <div className="cal-toolbar">

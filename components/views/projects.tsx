@@ -132,7 +132,7 @@ export function ProjectsView({ role, userId }: { role: UserRole; userId: string 
     <div className="page-wrap">
       <PageHeading
         title="Projects & Sites"
-        description="Operational sites that machines and daily working hours are recorded against, optionally linked to a customer for billing."
+        description="Manage operational sites, machine activity and billing customers."
         action={
           canManage ? (
             <button className="button button-primary" onClick={() => setForm({ mode: 'add', row: null })}>

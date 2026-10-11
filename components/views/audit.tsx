@@ -70,7 +70,7 @@ export function AuditView() {
     <div className="page-wrap">
       <PageHeading
         title="Audit Log"
-        description="Diff-only trail of changes to business records. Visible to administrators and management."
+        description="Business-record change history."
       />
 
       <div className="panel">

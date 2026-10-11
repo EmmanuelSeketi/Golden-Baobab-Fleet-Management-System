@@ -375,7 +375,7 @@ export function EquipmentLifecycleView({ role, userId }: { role: UserRole; userI
     <div className="page-wrap">
       <PageHeading
         title="Equipment Lifecycle"
-        description="Create and track project-linked entry, checkpoint, and exit confirmation documents."
+        description="Manage project-linked equipment entry, checkpoint and exit documents."
         action={
           canCreate ? (
             <button className="button button-primary" onClick={startNewDocument}>

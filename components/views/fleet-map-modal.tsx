@@ -24,6 +24,21 @@ type GeocodeResult = { latitude: number; longitude: number } | null
 
 const geocodeCache = new Map<string, GeocodeResult>()
 const TILE_SIZE = 256
+const ZAMBIA_BOUNDARY: readonly [number, number][] = [
+  [22.00, -16.21], [23.43, -17.64], [24.71, -17.50], [25.92, -18.00],
+  [27.04, -17.96], [27.82, -16.98], [28.82, -16.49], [28.93, -15.95],
+  [29.57, -15.64], [30.42, -15.62], [30.22, -15.00], [33.24, -14.00],
+  [33.03, -14.06], [32.67, -13.62], [33.02, -13.21], [33.02, -12.65],
+  [33.55, -12.37], [33.26, -12.14], [33.40, -11.16], [33.24, -10.89],
+  [33.71, -10.57], [33.37, -9.86], [32.96, -9.40], [31.08, -8.62],
+  [30.80, -8.28], [29.00, -8.46], [28.37, -9.26], [28.70, -9.80],
+  [28.70, -10.67], [28.39, -11.59], [29.04, -12.38], [29.48, -12.46],
+  [29.48, -12.25], [29.81, -12.15], [29.73, -13.46], [29.59, -13.20],
+  [29.01, -13.42], [28.45, -12.52], [27.62, -12.27], [27.21, -11.56],
+  [26.88, -11.98], [25.98, -11.95], [25.33, -11.63], [25.35, -11.20],
+  [24.44, -11.47], [24.38, -11.09], [24.00, -10.89], [24.08, -12.38],
+  [23.89, -12.84], [24.06, -13.00], [22.00, -13.00], [22.00, -16.21],
+]
 
 function projectCoordinates(latitude: number, longitude: number, zoom: number) {
   const scale = TILE_SIZE * 2 ** zoom
@@ -34,9 +49,15 @@ function projectCoordinates(latitude: number, longitude: number, zoom: number) {
   }
 }
 
-function fitZoom(sites: GeocodedSite[], size: MapSize) {
-  if (sites.length < 2 || size.width <= 0 || size.height <= 0) return 10
-  const points = sites.map((site) => projectCoordinates(site.latitude, site.longitude, 0))
+function fitZoom(sites: GeocodedSite[], size: MapSize, includeZambiaBoundary: boolean) {
+  if (size.width <= 0 || size.height <= 0) return 10
+  if (!includeZambiaBoundary && sites.length < 2) return 10
+  const points = [
+    ...sites.map((site) => projectCoordinates(site.latitude, site.longitude, 0)),
+    ...(includeZambiaBoundary
+      ? ZAMBIA_BOUNDARY.map(([longitude, latitude]) => projectCoordinates(latitude, longitude, 0))
+      : []),
+  ]
   const spreadX = Math.max(...points.map((point) => point.x)) - Math.min(...points.map((point) => point.x))
   const spreadY = Math.max(...points.map((point) => point.y)) - Math.min(...points.map((point) => point.y))
   for (let zoom = 18; zoom >= 2; zoom--) {
@@ -65,25 +86,27 @@ async function geocode(location: string): Promise<GeocodeResult> {
   return result
 }
 
-export function FleetMapModal({
-  machines,
-  open,
-  onClose,
-}: {
-  machines: FleetMapMachine[]
-  open: boolean
-  onClose: () => void
-}) {
+export function FleetMapModal(
+  props:
+    | { machines: FleetMapMachine[]; inline: true; maxZoom?: number }
+    | { machines: FleetMapMachine[]; open: boolean; onClose: () => void; inline?: false; maxZoom?: number },
+) {
+  const machines = props.machines
+  const inline = props.inline === true
+  const maxZoom = props.maxZoom ?? 18
+  const open = inline || ('open' in props && props.open)
   const [geocoded, setGeocoded] = useState<GeocodedSite[]>([])
   const [unlocated, setUnlocated] = useState<FleetMapMachine[]>([])
   const [failed, setFailed] = useState<string[]>([])
   const [loading, setLoading] = useState(false)
   const [mapSize, setMapSize] = useState<MapSize>({ width: 800, height: 400 })
   const [mapZoom, setMapZoom] = useState<number | null>(null)
+  const [mapLayer, setMapLayer] = useState<'street' | 'satellite'>('street')
   const [panOffset, setPanOffset] = useState({ x: 0, y: 0 })
   const [selectedLocation, setSelectedLocation] = useState<string | null>(null)
   const [lookupError, setLookupError] = useState('')
   const mapElement = useRef<HTMLDivElement | null>(null)
+  const active = inline || open
   const dragStart = useRef<{
     pointerId: number
     startX: number
@@ -110,7 +133,7 @@ export function FleetMapModal({
   }, [machines])
 
   useEffect(() => {
-    if (!open) return
+    if (!active) return
     const controller = new AbortController()
     let cancelled = false
 
@@ -155,13 +178,13 @@ export function FleetMapModal({
       cancelled = true
       controller.abort()
     }
-  }, [open, sites])
+  }, [active, sites])
 
   useEffect(() => {
-    if (!open) return
+    if (!active) return
     setMapZoom(null)
     setPanOffset({ x: 0, y: 0 })
-  }, [open])
+  }, [active])
 
   useEffect(() => {
     const element = mapElement.current
@@ -171,19 +194,27 @@ export function FleetMapModal({
     })
     observer.observe(element)
     return () => observer.disconnect()
-  }, [open, geocoded.length])
+  }, [active, geocoded.length])
 
-  const zoom = Math.min(18, Math.max(2, mapZoom ?? fitZoom(geocoded, mapSize)))
+  const zoom = Math.min(maxZoom, Math.max(2, mapZoom ?? fitZoom(geocoded, mapSize, inline)))
   const points = geocoded.map((site) => ({
     site,
     ...projectCoordinates(site.latitude, site.longitude, zoom),
   }))
-  const center = points.length
+  const outlinePoints = ZAMBIA_BOUNDARY.map(([longitude, latitude]) =>
+    projectCoordinates(latitude, longitude, zoom),
+  )
+  const center = inline && mapZoom === null
     ? {
+        x: (Math.min(...outlinePoints.map((point) => point.x)) + Math.max(...outlinePoints.map((point) => point.x))) / 2,
+        y: (Math.min(...outlinePoints.map((point) => point.y)) + Math.max(...outlinePoints.map((point) => point.y))) / 2,
+      }
+    : points.length
+      ? {
         x: points.reduce((sum, point) => sum + point.x, 0) / points.length,
         y: points.reduce((sum, point) => sum + point.y, 0) / points.length,
       }
-    : projectCoordinates(-13.1339, 27.8493, zoom)
+      : projectCoordinates(-13.1339, 27.8493, zoom)
   const left = center.x - mapSize.width / 2 - panOffset.x
   const top = center.y - mapSize.height / 2 - panOffset.y
   const tileXStart = Math.floor(left / TILE_SIZE)
@@ -199,16 +230,18 @@ export function FleetMapModal({
       if (y < 0 || y >= worldTileCount) continue
       const wrappedX = ((x % worldTileCount) + worldTileCount) % worldTileCount
       tiles.push({
-        key: `${zoom}-${x}-${y}`,
+        key: `${mapLayer}-${zoom}-${x}-${y}`,
         x: x * TILE_SIZE - left,
         y: y * TILE_SIZE - top,
-        url: `https://tile.openstreetmap.org/${zoom}/${wrappedX}/${y}.png`,
+        url: mapLayer === 'satellite'
+          ? `https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${zoom}/${y}/${wrappedX}`
+          : `https://tile.openstreetmap.org/${zoom}/${wrappedX}/${y}.png`,
       })
     }
   }
 
   function changeZoom(delta: number) {
-    setMapZoom((current) => Math.min(18, Math.max(2, (current ?? zoom) + delta)))
+    setMapZoom((current) => Math.min(maxZoom, Math.max(2, (current ?? zoom) + delta)))
   }
 
   function handlePointerDown(event: React.PointerEvent<HTMLDivElement>) {
@@ -240,13 +273,8 @@ export function FleetMapModal({
     }
   }
 
-  return (
-    <Modal
-      open={open}
-      onClose={onClose}
-      title="Fleet Map"
-      subtitle="Approximate project locations. Scroll to zoom, drag to pan, or use the map controls."
-    >
+  const content = (
+    <>
       {loading && geocoded.length === 0 ? (
         <div className="fleet-map-loading">
           <LoadingSpinner />
@@ -279,6 +307,18 @@ export function FleetMapModal({
               style={{ left: tile.x, top: tile.y }}
             />
           ))}
+          {inline ? (
+            <svg
+              className="fleet-map-country-outline"
+              width={mapSize.width}
+              height={mapSize.height}
+              aria-hidden="true"
+            >
+              <path
+                d={`${outlinePoints.map((point, index) => `${index === 0 ? 'M' : 'L'} ${point.x - left} ${point.y - top}`).join(' ')} Z`}
+              />
+            </svg>
+          ) : null}
           {points.map(({ site, x, y }) => {
             const locationKey = site.location.toLocaleLowerCase()
             const selected = selectedLocation === locationKey
@@ -308,8 +348,24 @@ export function FleetMapModal({
               </div>
             )
           })}
+          <div className="fleet-map-layer-toggle" role="group" aria-label="Map layer">
+            <button
+              type="button"
+              aria-pressed={mapLayer === 'street'}
+              onClick={() => setMapLayer('street')}
+            >
+              Street
+            </button>
+            <button
+              type="button"
+              aria-pressed={mapLayer === 'satellite'}
+              onClick={() => setMapLayer('satellite')}
+            >
+              Satellite
+            </button>
+          </div>
           <div className="fleet-map-controls" aria-label="Map controls">
-            <button type="button" aria-label="Zoom in" onClick={() => changeZoom(1)} disabled={zoom >= 18}>
+            <button type="button" aria-label="Zoom in" onClick={() => changeZoom(1)} disabled={zoom >= maxZoom}>
               <Plus size={18} />
             </button>
             <button type="button" aria-label="Zoom out" onClick={() => changeZoom(-1)} disabled={zoom <= 2}>
@@ -328,11 +384,15 @@ export function FleetMapModal({
           </div>
           <a
             className="fleet-map-attribution"
-            href="https://www.openstreetmap.org/copyright"
+            href={mapLayer === 'satellite'
+              ? 'https://www.esri.com/en-us/legal/terms/full-master-agreement'
+              : 'https://www.openstreetmap.org/copyright'}
             target="_blank"
             rel="noreferrer"
           >
-            © OpenStreetMap contributors
+            {mapLayer === 'satellite'
+              ? 'Imagery © Esri, Maxar, Earthstar Geographics · Boundary © OpenStreetMap'
+              : '© OpenStreetMap contributors'}
           </a>
         </div>
       ) : null}
@@ -352,6 +412,19 @@ export function FleetMapModal({
           ))}
         </div>
       ) : null}
+    </>
+  )
+
+  if (props.inline === true) return <div className="fleet-map-inline">{content}</div>
+
+  return (
+    <Modal
+      open={props.open}
+      onClose={props.onClose}
+      title="Fleet Map"
+      subtitle="Approximate project locations. Scroll to zoom, drag to pan, or use the map controls."
+    >
+      {content}
     </Modal>
   )
 }

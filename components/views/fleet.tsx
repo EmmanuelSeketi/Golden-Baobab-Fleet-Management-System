@@ -125,7 +125,7 @@ export function FleetView({ role, userId }: { role: UserRole; userId: string }) 
     <div className="page-wrap">
       <PageHeading
         title="Fleet Register"
-        description="Every machine with its live hour meter, current status, operator and deployment."
+        description="Machines, operating hours, status and deployment."
         action={
           canManage ? (
             <button

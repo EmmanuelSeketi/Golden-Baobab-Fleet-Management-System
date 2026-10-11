@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { PieChart } from '@mui/x-charts/PieChart'
 import { useSupabase } from '@/lib/supabase/use-supabase'
 import { useQuery } from '@/lib/gbi/use-query'
 import { canAccess, firstNameOf, type UserRole } from '@/lib/gbi/roles'
@@ -13,8 +14,9 @@ import {
   titleCase,
 } from '@/lib/gbi/format'
 import { KpiCard, LoadingSpinner, MiniState, PageHeading, StatusBadge } from '@/components/shared'
+import { FleetMapModal, type FleetMapMachine } from '@/components/views/fleet-map-modal'
 
-type MachineStatusRow = { current_status: string }
+type MachineStatusRow = FleetMapMachine & { current_status: string }
 type HourRow = { entry_date: string; total_hours: number | null }
 type MaintenanceRow = {
   id: string
@@ -32,13 +34,15 @@ type RecentRow = {
 }
 
 const STATUS_COLORS: Record<string, string> = {
-  on_hire: '#31b86c',
-  available: '#347184',
-  under_maintenance: '#d99a2b',
-  under_repair: '#c9822e',
-  breakdown: '#bc5b55',
+  on_hire: '#29b6f6',
+  available: '#31b86c',
+  under_maintenance: '#ffeb3b',
+  under_repair: '#ff9100',
+  breakdown: '#e0004d',
   parked: '#9aa9ad',
 }
+
+const SITE_COLORS = ['#20c997', '#29b6f6', '#ffc857', '#ff6b6b', '#b388ff', '#4dd0e1']
 
 function greetingFor(hour: number) {
   if (hour < 12) return 'Good morning'
@@ -67,7 +71,18 @@ export function OverviewView({ role, fullName }: { role: UserRole; fullName: str
   const showCommercial = canAccess('Hiring Quotations', role)
 
   const machines = useQuery<MachineStatusRow[]>(
-    () => supabase.from('machine').select('current_status').is('deleted_at', null),
+    () =>
+      supabase
+        .from('machine')
+        .select('machine_number,current_status,project:current_project_id(name,site_location)')
+        .is('deleted_at', null)
+        .then(({ data, error }) => ({
+          data: data?.map((machine) => ({
+            ...machine,
+            project: Array.isArray(machine.project) ? machine.project[0] ?? null : machine.project,
+          })) ?? null,
+          error,
+        })),
     [],
   )
   const hours = useQuery<HourRow[]>(
@@ -131,6 +146,23 @@ export function OverviewView({ role, fullName }: { role: UserRole; fullName: str
 
   const fleetTotal = (machines.data ?? []).length
   const activeMachines = statusCounts.on_hire ?? 0
+  const fleetSites = useMemo(() => {
+    const sites = new Map<string, { name: string; machineCount: number }>()
+    for (const machine of machines.data ?? []) {
+      const location = machine.project?.site_location?.trim()
+      if (!location) continue
+      const key = location.toLowerCase()
+      const site = sites.get(key)
+      if (site) site.machineCount += 1
+      else sites.set(key, { name: location, machineCount: 1 })
+    }
+    return Array.from(sites.values()).sort((a, b) => a.name.localeCompare(b.name))
+  }, [machines.data])
+  const siteChartData = fleetSites.map((site, index) => ({
+    label: site.name,
+    value: site.machineCount,
+    color: SITE_COLORS[index % SITE_COLORS.length],
+  }))
   const dueCount =
     (maintenance.data ?? []).filter((m) => m.status === 'due' || m.status === 'overdue').length
 
@@ -405,6 +437,74 @@ export function OverviewView({ role, fullName }: { role: UserRole; fullName: str
         </div>
       </div>
 
+      <section className="panel dashboard-map-panel">
+        <div className="panel-header">
+          <div>
+            <h2>Fleet map</h2>
+          </div>
+        </div>
+        <div className="dashboard-map-content">
+          <div className="dashboard-map-summary">
+            {machines.status !== 'ready' || fleetTotal === 0 ? (
+              <MiniState
+                status={machines.status}
+                error={machines.error}
+                isEmpty={fleetTotal === 0}
+                emptyText="No machines to map."
+              />
+            ) : (
+              <div className="dashboard-map-summary-layout">
+                {fleetSites.length > 0 && (
+                  <PieChart
+                    className="dashboard-site-chart"
+                    series={[{
+                      innerRadius: 30,
+                      outerRadius: 100,
+                      paddingAngle: 5,
+                      cornerRadius: 5,
+                      startAngle: -45,
+                      endAngle: 225,
+                      cx: 150,
+                      cy: 150,
+                      data: siteChartData,
+                      arcLabel: 'value',
+                      arcLabelMinAngle: 15,
+                    }]}
+                    width={300}
+                    height={300}
+                    hideLegend
+                  />
+                )}
+                {fleetSites.length > 0 && (
+                  <ul>
+                    {fleetSites.map((site, index) => (
+                      <li key={site.name}>
+                        <span>
+                          <i
+                            className="dashboard-site-dot"
+                            style={{ backgroundColor: SITE_COLORS[index % SITE_COLORS.length] }}
+                            aria-hidden="true"
+                          />
+                          {site.name}
+                        </span>
+                        <b>{site.machineCount}</b>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
+          </div>
+          {machines.status === 'ready' && fleetTotal > 0 && (
+            <FleetMapModal
+              machines={machines.data ?? []}
+              inline
+              maxZoom={7}
+            />
+          )}
+        </div>
+      </section>
+
       <div className="dashboard-grid lower">
         <div className="panel">
           <div className="panel-header">
@@ -493,6 +593,7 @@ export function OverviewView({ role, fullName }: { role: UserRole; fullName: str
           </div>
         </div>
       </div>
+
     </div>
   )
 }

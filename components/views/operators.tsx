@@ -151,7 +151,7 @@ export function OperatorsView({ role, userId }: { role: UserRole; userId: string
     <div className="page-wrap">
       <PageHeading
         title="Operators"
-        description="Machine operators, their credentials and current deployment. Operators do not have login accounts."
+        description="Operator profiles, credentials and machine assignments."
         action={
           canManage ? (
             <button

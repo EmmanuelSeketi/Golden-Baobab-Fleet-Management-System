@@ -123,16 +123,8 @@ function WorkspaceInner({ profile, email }: { profile: AppUser; email: string })
   const [active, setActive] = useState<Module>('Overview')
   const [menuOpen, setMenuOpen] = useState(false)
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(() => new Set())
-  const [topbarScrolled, setTopbarScrolled] = useState(false)
   const { lang, setLang } = useLang()
   const [signingOut, setSigningOut] = useState(false)
-
-  useEffect(() => {
-    const updateScrollState = () => setTopbarScrolled(window.scrollY > 0)
-    updateScrollState()
-    window.addEventListener('scroll', updateScrollState, { passive: true })
-    return () => window.removeEventListener('scroll', updateScrollState)
-  }, [])
 
   // Filter navigation to what this role may actually read (mirrors RLS).
   const groups = useMemo(
@@ -253,7 +245,7 @@ function WorkspaceInner({ profile, email }: { profile: AppUser; email: string })
       {menuOpen && <div className="scrim" onClick={() => setMenuOpen(false)} />}
 
       <div className="main-content">
-        <header className={`topbar${topbarScrolled ? ' topbar-scrolled' : ''}`}>
+        <header className="topbar">
           <button className="menu-button" onClick={() => setMenuOpen(true)} aria-label="Open menu">
             <Menu size={20} />
           </button>

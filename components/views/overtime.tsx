@@ -205,7 +205,7 @@ export function OvertimeView({ role, userId }: { role: UserRole; userId: string 
     <div className="page-wrap">
       <PageHeading
         title="Operator Overtime"
-        description="Overtime is calculated from submitted daily hours using current monthly Base Salary ÷ 208, at 1.5× on weekdays and 2× on weekends."
+        description="Daily overtime and review status."
         action={
           canRules ? (
             <div className="modal-foot-actions">

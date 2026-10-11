@@ -61,7 +61,7 @@ export function KpiCard({
   tone?: string
 }) {
   return (
-    <div className="kpi-card">
+    <div className={`kpi-card kpi-tone-${tone}`}>
       {Icon ? (
         <Icon size={28} className="kpi-icon" />
       ) : iconSrc ? (
