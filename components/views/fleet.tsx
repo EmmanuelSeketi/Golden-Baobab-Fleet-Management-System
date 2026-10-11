@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { AlertTriangle, Eye, MapPin, Pencil, Plus, Trash2 } from 'lucide-react'
+import { AlertTriangle, Eye, Image as ImageIcon, MapPin, Pencil, Plus, Trash2 } from 'lucide-react'
 import { useSupabase } from '@/lib/supabase/use-supabase'
 import { useQuery } from '@/lib/gbi/use-query'
 import { machineStatusTone, meter, money, shortDate, titleCase } from '@/lib/gbi/format'
@@ -9,6 +9,8 @@ import { canManageOps, type UserRole } from '@/lib/gbi/roles'
 import {
   ConfirmDialog,
   DetailGrid,
+  KpiCard,
+  LoadingSpinner,
   MiniState,
   Modal,
   ModalSection,
@@ -27,6 +29,7 @@ type Machine = {
   chassis_number: string | null
   engine_number: string | null
   machine_type: string
+  machine_image_path: string | null
   manufacturer: string | null
   brand: string | null
   model: string | null
@@ -43,7 +46,7 @@ type Machine = {
 }
 
 const LIST_SELECT =
-  'id,machine_number,asset_number,registration_number,chassis_number,engine_number,machine_type,manufacturer,brand,model,year,current_hour_meter,service_interval_hours,purchase_date,purchase_price,current_status,assigned_operator_id,current_project_id,operator:assigned_operator_id(full_name),project:current_project_id(name,site_location)'
+  'id,machine_number,asset_number,registration_number,chassis_number,engine_number,machine_type,machine_image_path,manufacturer,brand,model,year,current_hour_meter,service_interval_hours,purchase_date,purchase_price,current_status,assigned_operator_id,current_project_id,operator:assigned_operator_id(full_name),project:current_project_id(name,site_location)'
 
 const MACHINE_STATUSES = [
   'available',
@@ -83,11 +86,16 @@ export function FleetView({ role, userId }: { role: UserRole; userId: string }) 
     return all.filter(
       (m) =>
         m.machine_number.toLowerCase().includes(q) ||
-        m.machine_type.toLowerCase().includes(q) ||
-        (m.manufacturer ?? '').toLowerCase().includes(q) ||
-        (m.chassis_number ?? '').toLowerCase().includes(q),
+          m.machine_type.toLowerCase().includes(q) ||
+          (m.chassis_number ?? '').toLowerCase().includes(q),
     )
   }, [machines.data, query])
+  const machineRows = machines.data ?? []
+  const availableMachines = machineRows.filter((machine) => machine.current_status === 'available').length
+  const hiredMachines = machineRows.filter((machine) => machine.current_status === 'on_hire').length
+  const attentionMachines = machineRows.filter((machine) =>
+    ['under_maintenance', 'under_repair', 'breakdown'].includes(machine.current_status),
+  ).length
 
   async function confirmDelete() {
     if (!deleting) return
@@ -125,7 +133,6 @@ export function FleetView({ role, userId }: { role: UserRole; userId: string }) 
     <div className="page-wrap">
       <PageHeading
         title="Fleet Register"
-        description="Machines, operating hours, status and deployment."
         action={
           canManage ? (
             <button
@@ -143,10 +150,37 @@ export function FleetView({ role, userId }: { role: UserRole; userId: string }) 
         }
       />
 
+      <div className="kpi-grid">
+        <KpiCard
+          tone="gold"
+          label="Registered machines"
+          value={machines.status === 'loading' ? <LoadingSpinner small /> : machines.status === 'ready' ? machineRows.length : 'N/A'}
+          sub="active fleet"
+        />
+        <KpiCard
+          tone="green"
+          label="Available"
+          value={machines.status === 'loading' ? <LoadingSpinner small /> : machines.status === 'ready' ? availableMachines : 'N/A'}
+          sub="ready for deployment"
+        />
+        <KpiCard
+          tone="blue"
+          label="On hire"
+          value={machines.status === 'loading' ? <LoadingSpinner small /> : machines.status === 'ready' ? hiredMachines : 'N/A'}
+          sub="currently deployed"
+        />
+        <KpiCard
+          tone="red"
+          label="Needs attention"
+          value={machines.status === 'loading' ? <LoadingSpinner small /> : machines.status === 'ready' ? attentionMachines : 'N/A'}
+          sub="maintenance, repair or breakdown"
+        />
+      </div>
+
       <div className="filter-row">
         <div className="toolbar-search">
           <input
-            placeholder="Search by number, type, manufacturer or chassis…"
+            placeholder="Search by number, type or chassis…"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
@@ -183,8 +217,23 @@ export function FleetView({ role, userId }: { role: UserRole; userId: string }) 
                 {rows.map((m) => (
                   <tr key={m.id} className="clickable-row" onClick={() => setSelected(m)}>
                     <td>
-                      <b className="mono">{m.machine_number}</b>
-                      <div className="muted-cell">{[m.manufacturer, m.model].filter(Boolean).join(' ')}</div>
+                      <div className="fleet-machine-table-cell">
+                        {m.machine_image_path ? (
+                          <img
+                            className="fleet-machine-thumb"
+                            src={supabase.storage.from('machine-images').getPublicUrl(m.machine_image_path).data.publicUrl}
+                            alt=""
+                          />
+                        ) : (
+                          <span className="fleet-machine-thumb fleet-machine-thumb-empty" aria-hidden="true">
+                            <ImageIcon size={16} />
+                          </span>
+                        )}
+                        <div>
+                          <b className="mono">{m.machine_number}</b>
+                          <div className="muted-cell">{m.model ?? ''}</div>
+                        </div>
+                      </div>
                     </td>
                     <td>{m.machine_type}</td>
                     <td className="mono num">{meter(m.current_hour_meter)}</td>
@@ -416,6 +465,13 @@ function MachineModal({
     >
       {machine && (
         <>
+          {machine.machine_image_path && (
+            <img
+              className="fleet-machine-detail-image"
+              src={supabase.storage.from('machine-images').getPublicUrl(machine.machine_image_path).data.publicUrl}
+              alt={`${machine.machine_number} machine`}
+            />
+          )}
           <DetailGrid
             items={[
               ['Asset number', machine.asset_number ?? 'N/A'],
@@ -544,6 +600,16 @@ function MachineFormModal({
   const [saving, setSaving] = useState(false)
   const [formError, setFormError] = useState('')
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
+  const [machinePhoto, setMachinePhoto] = useState<Blob | null>(null)
+  const [machinePhotoPreview, setMachinePhotoPreview] = useState('')
+  const [removeMachinePhoto, setRemoveMachinePhoto] = useState(false)
+  const [photoBusy, setPhotoBusy] = useState(false)
+
+  useEffect(() => {
+    return () => {
+      if (machinePhotoPreview.startsWith('blob:')) URL.revokeObjectURL(machinePhotoPreview)
+    }
+  }, [machinePhotoPreview])
 
   const operators = useQuery<OptionRow[]>(
     () =>
@@ -603,15 +669,39 @@ function MachineFormModal({
     } else {
       setForm({ current_status: 'available' })
     }
+    setMachinePhoto(null)
+    setRemoveMachinePhoto(false)
+    setMachinePhotoPreview(
+      machine?.machine_image_path
+        ? supabase.storage.from('machine-images').getPublicUrl(machine.machine_image_path).data.publicUrl
+        : '',
+    )
     setFieldErrors({})
     setFormError('')
-  }, [open, mode, machine])
+  }, [open, mode, machine, supabase])
 
   function set(key: string, value: string) {
     setForm((f) => ({ ...f, [key]: value }))
   }
 
+  async function chooseMachinePhoto(file: File | undefined) {
+    if (!file) return
+    setPhotoBusy(true)
+    setFormError('')
+    try {
+      const compressed = await compressMachinePhoto(file)
+      setMachinePhoto(compressed)
+      setMachinePhotoPreview(URL.createObjectURL(compressed))
+      setRemoveMachinePhoto(false)
+    } catch (error) {
+      setFormError(error instanceof Error ? error.message : 'Could not process this machine photo.')
+    } finally {
+      setPhotoBusy(false)
+    }
+  }
+
   async function submit() {
+    if (photoBusy) return
     const errors: Record<string, string> = {}
     if (!form.machine_number?.trim()) errors.machine_number = 'Machine number is required.'
     if (!form.machine_type?.trim()) errors.machine_type = 'Machine type is required.'
@@ -672,6 +762,39 @@ function MachineFormModal({
       machineId = data?.id ?? ''
     }
 
+    let newImagePath: string | null = null
+    let previousImagePath: string | null = null
+    if (!error && machineId && (machinePhoto || removeMachinePhoto)) {
+      if (machinePhoto) {
+        newImagePath = `${machineId}/${crypto.randomUUID()}.webp`
+        const { error: uploadError } = await supabase.storage
+          .from('machine-images')
+          .upload(newImagePath, machinePhoto, {
+            cacheControl: '31536000',
+            contentType: 'image/webp',
+            upsert: false,
+          })
+        error = uploadError
+      }
+      if (!error) {
+        const { error: imageUpdateError } = await supabase
+          .from('machine')
+          .update({ machine_image_path: removeMachinePhoto ? null : newImagePath, updated_by: userId })
+          .eq('id', machineId)
+        error = imageUpdateError
+        if (error && newImagePath) {
+          const { error: cleanupError } = await supabase.storage.from('machine-images').remove([newImagePath])
+          if (cleanupError) {
+            setFormError('Could not save the machine photo, and its uploaded file could not be removed.')
+            setSaving(false)
+            return
+          }
+        } else if (!error) {
+          previousImagePath = machine?.machine_image_path ?? null
+        }
+      }
+    }
+
     if (!error && machineId) {
       const { error: assignmentError } = await supabase.rpc('set_machine_assignment', {
         p_machine_id: machineId,
@@ -679,6 +802,18 @@ function MachineFormModal({
         p_project_id: payload.current_project_id,
       })
       error = assignmentError
+    }
+    if (previousImagePath && previousImagePath !== newImagePath) {
+      const { error: removeError } = await supabase.storage.from('machine-images').remove([previousImagePath])
+      if (removeError) {
+        setFormError(
+          error
+            ? 'The machine could not be fully saved, and its previous photo could not be removed.'
+            : 'The machine was saved, but its previous photo could not be removed.',
+        )
+        setSaving(false)
+        return
+      }
     }
     setSaving(false)
 
@@ -704,7 +839,7 @@ function MachineFormModal({
   return (
     <Modal
       open={open}
-      onClose={saving ? () => {} : onClose}
+      onClose={saving || photoBusy ? () => {} : onClose}
       eyebrow="Fleet register"
       title={mode === 'edit' ? 'Edit Machine' : 'Add Machine'}
       subtitle={
@@ -714,11 +849,11 @@ function MachineFormModal({
       }
       footer={
         <div className="footer-actions">
-          <button className="button button-secondary" onClick={onClose} disabled={saving}>
+          <button className="button button-secondary" onClick={onClose} disabled={saving || photoBusy}>
             Cancel
           </button>
-          <button className="button button-primary" onClick={submit} disabled={saving}>
-            {saving ? 'Saving…' : mode === 'edit' ? 'Save changes' : 'Save Machine'}
+          <button className="button button-primary" onClick={submit} disabled={saving || photoBusy}>
+            {photoBusy ? 'Processing photo…' : saving ? 'Saving…' : mode === 'edit' ? 'Save changes' : 'Save Machine'}
           </button>
         </div>
       }
@@ -730,6 +865,50 @@ function MachineFormModal({
             {formError}
           </div>
         )}
+
+        <div className="form-field full">
+          <label htmlFor="machine-photo">Machine photo</label>
+          <div className="fleet-machine-photo-editor">
+            {machinePhotoPreview ? (
+              <img src={machinePhotoPreview} alt="Machine photo preview" />
+            ) : (
+              <span className="fleet-machine-photo-empty">
+                <ImageIcon size={25} />
+                No photo selected
+              </span>
+            )}
+            <div>
+              <input
+                id="machine-photo"
+                type="file"
+                accept="image/*"
+                disabled={saving || photoBusy}
+                onChange={(event) => {
+                  const file = event.currentTarget.files?.[0]
+                  event.currentTarget.value = ''
+                  void chooseMachinePhoto(file)
+                }}
+              />
+              {machinePhotoPreview && (
+                <button
+                  className="button button-secondary"
+                  type="button"
+                  disabled={saving || photoBusy}
+                  onClick={() => {
+                    setMachinePhoto(null)
+                    setMachinePhotoPreview('')
+                    setRemoveMachinePhoto(!!machine?.machine_image_path)
+                  }}
+                >
+                  Remove photo
+                </button>
+              )}
+              <span className="field-hint">
+                {photoBusy ? 'Processing photo…' : 'Images are resized and saved as WebP.'}
+              </span>
+            </div>
+          </div>
+        </div>
 
         <Field
           label="Machine number"
@@ -841,6 +1020,32 @@ function MachineFormModal({
       </div>
     </Modal>
   )
+}
+
+async function compressMachinePhoto(file: File): Promise<Blob> {
+  if (!file.type.startsWith('image/')) throw new Error('Choose an image file for the machine photo.')
+  const bitmap = await createImageBitmap(file)
+  try {
+    for (const [maxDimension, quality] of [[1600, 0.82], [1280, 0.72], [1024, 0.62]] as const) {
+      const scale = Math.min(1, maxDimension / Math.max(bitmap.width, bitmap.height))
+      const canvas = document.createElement('canvas')
+      canvas.width = Math.max(1, Math.round(bitmap.width * scale))
+      canvas.height = Math.max(1, Math.round(bitmap.height * scale))
+      const context = canvas.getContext('2d')
+      if (!context) throw new Error('Your browser could not process this image.')
+      context.drawImage(bitmap, 0, 0, canvas.width, canvas.height)
+      const compressed = await new Promise<Blob | null>((resolve) =>
+        canvas.toBlob(resolve, 'image/webp', quality),
+      )
+      if (!compressed || compressed.type !== 'image/webp') {
+        throw new Error('Your browser could not compress this image to WebP.')
+      }
+      if (compressed.size <= 1024 * 1024) return compressed
+    }
+    throw new Error('This photo is too large after compression. Choose a smaller image.')
+  } finally {
+    bitmap.close()
+  }
 }
 
 function Field({

@@ -8,6 +8,8 @@ import { money, shortDate } from '@/lib/gbi/format'
 import { canManageOps, type UserRole } from '@/lib/gbi/roles'
 import {
   DetailGrid,
+  KpiCard,
+  LoadingSpinner,
   Modal,
   PageHeading,
   RowActions,
@@ -75,12 +77,14 @@ export function RepairsView({ role, userId }: { role: UserRole; userId: string }
     if (filter === 'all') return all
     return all.filter((r) => (filter === 'completed' ? r.repair_completed : !r.repair_completed))
   }, [records.data, filter])
+  const repairRows = records.data ?? []
+  const openRepairs = repairRows.filter((repair) => !repair.repair_completed).length
+  const completedRepairs = repairRows.filter((repair) => repair.repair_completed).length
 
   return (
     <div className="page-wrap">
       <PageHeading
         title="Repairs"
-        description="Breakdown and fault records with downtime, parts used and repair status."
         action={
           canManage ? (
             <button
@@ -97,6 +101,27 @@ export function RepairsView({ role, userId }: { role: UserRole; userId: string }
           ) : undefined
         }
       />
+
+      <div className="kpi-grid">
+        <KpiCard
+          tone="gold"
+          label="Repair records"
+          value={records.status === 'loading' ? <LoadingSpinner small /> : records.status === 'ready' ? repairRows.length : 'N/A'}
+          sub="all logged faults"
+        />
+        <KpiCard
+          tone="red"
+          label="Open repairs"
+          value={records.status === 'loading' ? <LoadingSpinner small /> : records.status === 'ready' ? openRepairs : 'N/A'}
+          sub="awaiting completion"
+        />
+        <KpiCard
+          tone="green"
+          label="Completed"
+          value={records.status === 'loading' ? <LoadingSpinner small /> : records.status === 'ready' ? completedRepairs : 'N/A'}
+          sub="repairs completed"
+        />
+      </div>
 
       <div className="filter-row">
         {FILTERS.map((f) => (

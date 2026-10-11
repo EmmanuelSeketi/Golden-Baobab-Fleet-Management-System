@@ -476,18 +476,15 @@ export function OverviewView({ role, fullName }: { role: UserRole; fullName: str
                   />
                 )}
                 {fleetSites.length > 0 && (
-                  <ul>
+                  <ul className="dashboard-site-legend">
                     {fleetSites.map((site, index) => (
                       <li key={site.name}>
-                        <span>
-                          <i
-                            className="dashboard-site-dot"
-                            style={{ backgroundColor: SITE_COLORS[index % SITE_COLORS.length] }}
-                            aria-hidden="true"
-                          />
-                          {site.name}
-                        </span>
-                        <b>{site.machineCount}</b>
+                        <i
+                          className="dashboard-site-dot"
+                          style={{ backgroundColor: SITE_COLORS[index % SITE_COLORS.length] }}
+                          aria-hidden="true"
+                        />
+                        <span>{site.name}</span>
                       </li>
                     ))}
                   </ul>

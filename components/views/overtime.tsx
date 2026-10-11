@@ -205,7 +205,6 @@ export function OvertimeView({ role, userId }: { role: UserRole; userId: string 
     <div className="page-wrap">
       <PageHeading
         title="Operator Overtime"
-        description="Daily overtime and review status."
         action={
           canRules ? (
             <div className="modal-foot-actions">

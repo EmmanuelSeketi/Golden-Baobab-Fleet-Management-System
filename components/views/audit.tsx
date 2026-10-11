@@ -70,7 +70,6 @@ export function AuditView() {
     <div className="page-wrap">
       <PageHeading
         title="Audit Log"
-        description="Business-record change history."
       />
 
       <div className="panel">

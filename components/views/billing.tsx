@@ -102,7 +102,6 @@ export function BillingView({ role, userId }: { role: UserRole; userId: string }
     <div className="page-wrap">
       <PageHeading
         title="Hiring Quotations"
-        description="Prepare and track equipment-hire quotations for customers, projects and machines."
         action={
           canManage ? (
             <button className="button button-primary" onClick={() => setCreating(true)}>

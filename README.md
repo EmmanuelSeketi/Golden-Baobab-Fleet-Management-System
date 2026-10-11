@@ -31,6 +31,9 @@ and configure the compressed WebP storage bucket. The operator-module machine as
 `sync_operator_machine_assignments` function from `scripts/005_project_contract_and_assignment_flow.sql`; ensure
 that migration has also been applied to the database.
 
+Run `scripts/014_machine_images.sql` in the Supabase SQL Editor to add machine photo storage. Fleet Register
+photo upload and display require this migration.
+
 The Settings & Backup page can download JSON snapshots or SQL `INSERT` statements for the listed tables. SQL
 downloads contain records readable by the signed-in role, not database schema, functions, or files in Supabase
 Storage. Use Supabase's database backup facilities for a complete schema-and-data backup.

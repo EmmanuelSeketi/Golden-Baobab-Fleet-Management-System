@@ -35,7 +35,6 @@ export function NotificationsView() {
     <div className="page-wrap">
       <PageHeading
         title="Notifications"
-        description="System alerts for reviews, service due, contract expiry and billing events."
         action={
           notifications.status === 'ready' ? (
             <span className="pill-count">

@@ -9,6 +9,8 @@ import { canManageCommercial, type UserRole } from '@/lib/gbi/roles'
 import {
   ConfirmDialog,
   DetailGrid,
+  KpiCard,
+  LoadingSpinner,
   MiniState,
   Modal,
   ModalSection,
@@ -71,6 +73,7 @@ type ContractDocumentHistory = {
 }
 
 type DeleteTarget = { kind: 'customer' | 'contract'; id: string; name: string } | null
+type ContractSummary = { id: string; status: string; end_date: string | null }
 
 const CONTRACT_SELECT =
   'id,contract_number,customer_id,status,start_date,end_date,payment_terms_days,billing_frequency,customer:customer_id(company_name,customer_code,currency,contact_name,email,phone),contract_machine(count),billing_rule(count)'
@@ -116,6 +119,28 @@ export function ContractsView({ role, userId }: { role: UserRole; userId: string
         .order('company_name') as unknown as PromiseLike<{ data: Customer[] | null; error: unknown }>,
     [],
   )
+  const contractSummary = useQuery<ContractSummary[]>(
+    () =>
+      supabase
+        .from('contract')
+        .select('id,status,end_date')
+        .order('start_date', { ascending: false }) as unknown as PromiseLike<{
+        data: ContractSummary[] | null
+        error: unknown
+      }>,
+    [],
+  )
+  const contractRows = contractSummary.data ?? []
+  const activeContracts = contractRows.filter((contract) => contract.status === 'active').length
+  const expiryLimit = new Date()
+  expiryLimit.setDate(expiryLimit.getDate() + 30)
+  const expiringContracts = contractRows.filter(
+    (contract) =>
+      contract.status === 'active' &&
+      contract.end_date !== null &&
+      contract.end_date >= new Date().toISOString().slice(0, 10) &&
+      contract.end_date <= expiryLimit.toISOString().slice(0, 10),
+  ).length
 
   const historyRows = useMemo(() => {
     const all = history.data ?? []
@@ -160,13 +185,13 @@ export function ContractsView({ role, userId }: { role: UserRole; userId: string
     setSelectedCustomer(null)
     history.reload()
     customers.reload()
+    contractSummary.reload()
   }
 
   return (
     <div className="page-wrap">
       <PageHeading
         title="Customers & Contracts"
-        description="Generate project-based contracts and review their document history."
         action={
           <div className="heading-actions">
             {canManage && tab === 'contracts' && (
@@ -182,6 +207,33 @@ export function ContractsView({ role, userId }: { role: UserRole; userId: string
           </div>
         }
       />
+
+      <div className="kpi-grid">
+        <KpiCard
+          tone="gold"
+          label="Customers"
+          value={customers.status === 'loading' ? <LoadingSpinner small /> : customers.status === 'ready' ? (customers.data ?? []).length : 'N/A'}
+          sub="registered customers"
+        />
+        <KpiCard
+          tone="blue"
+          label="Contracts"
+          value={contractSummary.status === 'loading' ? <LoadingSpinner small /> : contractSummary.status === 'ready' ? contractRows.length : 'N/A'}
+          sub="all agreements"
+        />
+        <KpiCard
+          tone="green"
+          label="Active contracts"
+          value={contractSummary.status === 'loading' ? <LoadingSpinner small /> : contractSummary.status === 'ready' ? activeContracts : 'N/A'}
+          sub="currently in force"
+        />
+        <KpiCard
+          tone="red"
+          label="Expiring soon"
+          value={contractSummary.status === 'loading' ? <LoadingSpinner small /> : contractSummary.status === 'ready' ? expiringContracts : 'N/A'}
+          sub="within 30 days"
+        />
+      </div>
 
       <div className="filter-row">
         <div className="seg-tabs">
@@ -333,6 +385,7 @@ export function ContractsView({ role, userId }: { role: UserRole; userId: string
           onSaved={() => {
             history.reload()
             customers.reload()
+            contractSummary.reload()
           }}
         />
       )}
@@ -363,6 +416,7 @@ export function ContractsView({ role, userId }: { role: UserRole; userId: string
             setContractForm(null)
             setSelected(null)
             history.reload()
+            contractSummary.reload()
           }}
         />
       )}

@@ -269,7 +269,6 @@ export function MachineHistoryView() {
     <div className="page-wrap">
       <PageHeading
         title="Machine History"
-        description="Hours, deployments, maintenance and repairs for each machine."
       />
 
       {!machineId ? (

@@ -5,9 +5,11 @@ import { AlertTriangle, Building2, Eye, MapPin, Pencil, Plus } from 'lucide-reac
 import { useSupabase } from '@/lib/supabase/use-supabase'
 import { useQuery } from '@/lib/gbi/use-query'
 import { hours as fmtHours, shortDate, titleCase } from '@/lib/gbi/format'
-import { canAccess, canManageProjects, type UserRole } from '@/lib/gbi/roles'
+import { canAccess, canManageOps, canManageProjects, type UserRole } from '@/lib/gbi/roles'
 import {
   DetailGrid,
+  KpiCard,
+  LoadingSpinner,
   MiniState,
   Modal,
   ModalSection,
@@ -127,12 +129,22 @@ export function ProjectsView({ role, userId }: { role: UserRole; userId: string 
         (p.customer?.company_name ?? '').toLowerCase().includes(q),
     )
   }, [projects.data, query])
+  const projectCounts = useMemo(() => {
+    const counts = { ongoing: 0, notStarted: 0, completed: 0 }
+    for (const project of projects.data ?? []) {
+      const status = currentProjectStatus(project)
+      if (status === 'ongoing') counts.ongoing += 1
+      else if (status === 'completed') counts.completed += 1
+      else counts.notStarted += 1
+    }
+    return counts
+  }, [projects.data])
+  const projectRows = projects.data ?? []
 
   return (
     <div className="page-wrap">
       <PageHeading
         title="Projects & Sites"
-        description="Manage operational sites, machine activity and billing customers."
         action={
           canManage ? (
             <button className="button button-primary" onClick={() => setForm({ mode: 'add', row: null })}>
@@ -142,6 +154,33 @@ export function ProjectsView({ role, userId }: { role: UserRole; userId: string 
           ) : undefined
         }
       />
+
+      <div className="kpi-grid">
+        <KpiCard
+          tone="gold"
+          label="Projects & sites"
+          value={projects.status === 'loading' ? <LoadingSpinner small /> : projects.status === 'ready' ? projectRows.length : 'N/A'}
+          sub="registered projects"
+        />
+        <KpiCard
+          tone="green"
+          label="Ongoing"
+          value={projects.status === 'loading' ? <LoadingSpinner small /> : projects.status === 'ready' ? projectCounts.ongoing : 'N/A'}
+          sub="active deployments"
+        />
+        <KpiCard
+          tone="blue"
+          label="Not started"
+          value={projects.status === 'loading' ? <LoadingSpinner small /> : projects.status === 'ready' ? projectCounts.notStarted : 'N/A'}
+          sub="awaiting deployment"
+        />
+        <KpiCard
+          tone="red"
+          label="Completed"
+          value={projects.status === 'loading' ? <LoadingSpinner small /> : projects.status === 'ready' ? projectCounts.completed : 'N/A'}
+          sub="past deployments"
+        />
+      </div>
 
       <div className="filter-row">
         <div className="toolbar-search">
@@ -219,6 +258,7 @@ export function ProjectsView({ role, userId }: { role: UserRole; userId: string 
       <ProjectDetailModal
         project={selected}
         canManage={canManage}
+        canAssignMachines={canManageOps(role)}
         canViewContracts={canAccess('Customers & Contracts', role)}
         onEdit={() => selected && setForm({ mode: 'edit', row: selected })}
         onClose={() => setSelected(null)}
@@ -259,20 +299,33 @@ type ProjectContract = {
   contract: { contract_number: string; status: string } | null
 }
 
+type ProjectMachine = {
+  id: string
+  machine_number: string
+  machine_type: string
+  assigned_operator_id: string | null
+  current_project_id: string | null
+}
+
 function ProjectDetailModal({
   project,
   canManage,
+  canAssignMachines,
   canViewContracts,
   onEdit,
   onClose,
 }: {
   project: Project | null
   canManage: boolean
+  canAssignMachines: boolean
   canViewContracts: boolean
   onEdit: () => void
   onClose: () => void
 }) {
   const supabase = useSupabase()
+  const [machineToAssign, setMachineToAssign] = useState('')
+  const [assignmentBusy, setAssignmentBusy] = useState(false)
+  const [assignmentError, setAssignmentError] = useState('')
 
   const recent = useQuery<RecentEntry[]>(
     () =>
@@ -300,6 +353,43 @@ function ProjectDetailModal({
           }>),
     [project?.id, canViewContracts],
   )
+  const machines = useQuery<ProjectMachine[]>(
+    () =>
+      !project || !canAssignMachines
+        ? Promise.resolve({ data: [], error: null })
+        : (supabase
+            .from('machine')
+            .select('id,machine_number,machine_type,assigned_operator_id,current_project_id')
+            .is('deleted_at', null)
+            .order('machine_number') as unknown as PromiseLike<{ data: ProjectMachine[] | null; error: unknown }>),
+    [project?.id, canAssignMachines],
+  )
+  const projectMachines = (machines.data ?? []).filter((machine) => machine.current_project_id === project?.id)
+
+  useEffect(() => {
+    setMachineToAssign('')
+    setAssignmentError('')
+  }, [project?.id])
+
+  async function assignMachine() {
+    if (!project || !machineToAssign || assignmentBusy) return
+    const machine = (machines.data ?? []).find((item) => item.id === machineToAssign)
+    if (!machine) return
+    setAssignmentBusy(true)
+    setAssignmentError('')
+    const { error } = await supabase.rpc('set_machine_assignment', {
+      p_machine_id: machine.id,
+      p_operator_id: machine.assigned_operator_id,
+      p_project_id: project.id,
+    })
+    setAssignmentBusy(false)
+    if (error) {
+      setAssignmentError((error as { message?: string }).message ?? 'Could not assign this machine to the project.')
+      return
+    }
+    setMachineToAssign('')
+    machines.reload()
+  }
 
   return (
     <Modal
@@ -331,6 +421,51 @@ function ProjectDetailModal({
               ['Created', shortDate(project.created_at)],
             ]}
           />
+
+          {canAssignMachines && (
+            <ModalSection title="Project machines" count={projectMachines.length}>
+              <MiniState
+                status={machines.status}
+                error={machines.error}
+                isEmpty={projectMachines.length === 0}
+                emptyText="No machines are assigned to this project yet."
+              />
+              {projectMachines.map((machine) => (
+                <div className="stack-row" key={machine.id}>
+                  <div>
+                    <b className="mono">{machine.machine_number}</b>
+                    <span>{machine.machine_type}</span>
+                  </div>
+                </div>
+              ))}
+              <div className="project-machine-assign">
+                <select
+                  aria-label="Select machine to assign"
+                  value={machineToAssign}
+                  onChange={(event) => setMachineToAssign(event.target.value)}
+                  disabled={machines.status !== 'ready' || assignmentBusy}
+                >
+                  <option value="">Select a machine…</option>
+                  {(machines.data ?? []).map((machine) => (
+                    <option key={machine.id} value={machine.id}>
+                      {machine.machine_number} · {machine.machine_type}
+                      {machine.current_project_id && machine.current_project_id !== project.id
+                        ? ' · assigned to another project'
+                        : ''}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  className="button button-primary"
+                  onClick={assignMachine}
+                  disabled={!machineToAssign || assignmentBusy || machines.status !== 'ready'}
+                >
+                  {assignmentBusy ? 'Assigning…' : 'Assign machine'}
+                </button>
+              </div>
+              {assignmentError && <p className="form-error" role="alert">{assignmentError}</p>}
+            </ModalSection>
+          )}
 
           <ModalSection title="Recent daily hours" count={recent.data?.length}>
             <MiniState

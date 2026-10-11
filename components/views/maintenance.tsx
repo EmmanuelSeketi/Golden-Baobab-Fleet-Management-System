@@ -8,6 +8,8 @@ import { maintenanceStatusTone, money, shortDate, titleCase } from '@/lib/gbi/fo
 import { canManageOps, type UserRole } from '@/lib/gbi/roles'
 import {
   DetailGrid,
+  KpiCard,
+  LoadingSpinner,
   Modal,
   PageHeading,
   RowActions,
@@ -77,12 +79,14 @@ export function MaintenanceView({ role, userId }: { role: UserRole; userId: stri
     const all = records.data ?? []
     return filter === 'all' ? all : all.filter((r) => r.status === filter)
   }, [records.data, filter])
+  const maintenanceRows = records.data ?? []
+  const dueServices = maintenanceRows.filter((record) => record.status === 'due' || record.status === 'overdue').length
+  const completedServices = maintenanceRows.filter((record) => record.status === 'completed').length
 
   return (
     <div className="page-wrap">
       <PageHeading
         title="Maintenance"
-        description="Scheduled and completed servicing, with the next service due by hours or date."
         action={
           canManage ? (
             <button
@@ -99,6 +103,27 @@ export function MaintenanceView({ role, userId }: { role: UserRole; userId: stri
           ) : undefined
         }
       />
+
+      <div className="kpi-grid">
+        <KpiCard
+          tone="gold"
+          label="Service records"
+          value={records.status === 'loading' ? <LoadingSpinner small /> : records.status === 'ready' ? maintenanceRows.length : 'N/A'}
+          sub="all maintenance"
+        />
+        <KpiCard
+          tone="red"
+          label="Due / overdue"
+          value={records.status === 'loading' ? <LoadingSpinner small /> : records.status === 'ready' ? dueServices : 'N/A'}
+          sub="needs attention"
+        />
+        <KpiCard
+          tone="green"
+          label="Completed"
+          value={records.status === 'loading' ? <LoadingSpinner small /> : records.status === 'ready' ? completedServices : 'N/A'}
+          sub="servicing completed"
+        />
+      </div>
 
       <div className="filter-row">
         {STATUSES.map((s) => (

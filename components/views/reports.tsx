@@ -92,7 +92,6 @@ export function ReportsView({ role }: { role: UserRole }) {
     <div className="page-wrap">
       <PageHeading
         title="Reports"
-        description="Operational trends aggregated live from recorded working hours and invoicing."
       />
 
       <div className={`report-grid ${showRevenue ? '' : 'single'}`}>

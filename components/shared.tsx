@@ -8,12 +8,10 @@ import type { QueryStatus } from '@/lib/gbi/use-query'
 export function PageHeading({
   eyebrow,
   title,
-  description,
   action,
 }: {
   eyebrow?: string
   title: string
-  description?: string
   action?: React.ReactNode
 }) {
   return (
@@ -21,7 +19,6 @@ export function PageHeading({
       <div>
         {eyebrow ? <div className="eyebrow">{eyebrow}</div> : null}
         <h1 className="page-title">{title}</h1>
-        {description ? <p className="page-subtitle">{description}</p> : null}
       </div>
       {action}
     </div>

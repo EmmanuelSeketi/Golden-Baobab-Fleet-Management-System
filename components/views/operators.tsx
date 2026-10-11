@@ -16,6 +16,8 @@ import { canManageOps, type UserRole } from '@/lib/gbi/roles'
 import {
   ConfirmDialog,
   DetailGrid,
+  KpiCard,
+  LoadingSpinner,
   MiniState,
   Modal,
   ModalSection,
@@ -105,6 +107,9 @@ export function OperatorsView({ role, userId }: { role: UserRole; userId: string
       (o) => o.full_name.toLowerCase().includes(q) || (o.nrc_number ?? '').toLowerCase().includes(q),
     )
   }, [operators.data, query])
+  const operatorRows = operators.data ?? []
+  const workingOperators = operatorRows.filter((operator) => operator.is_active && operator.status === 'working').length
+  const standbyOperators = operatorRows.filter((operator) => operator.is_active && operator.status === 'standby').length
 
   function reloadAll() {
     operators.reload()
@@ -151,7 +156,6 @@ export function OperatorsView({ role, userId }: { role: UserRole; userId: string
     <div className="page-wrap">
       <PageHeading
         title="Operators"
-        description="Operator profiles, credentials and machine assignments."
         action={
           canManage ? (
             <button
@@ -167,6 +171,27 @@ export function OperatorsView({ role, userId }: { role: UserRole; userId: string
           ) : undefined
         }
       />
+
+      <div className="kpi-grid">
+        <KpiCard
+          tone="gold"
+          label="Registered operators"
+          value={operators.status === 'loading' ? <LoadingSpinner small /> : operators.status === 'ready' ? operatorRows.length : 'N/A'}
+          sub="operator profiles"
+        />
+        <KpiCard
+          tone="green"
+          label="Working"
+          value={operators.status === 'loading' ? <LoadingSpinner small /> : operators.status === 'ready' ? workingOperators : 'N/A'}
+          sub="active operators"
+        />
+        <KpiCard
+          tone="blue"
+          label="On standby"
+          value={operators.status === 'loading' ? <LoadingSpinner small /> : operators.status === 'ready' ? standbyOperators : 'N/A'}
+          sub="available for assignment"
+        />
+      </div>
 
       <div className="filter-row">
         <div className="toolbar-search">

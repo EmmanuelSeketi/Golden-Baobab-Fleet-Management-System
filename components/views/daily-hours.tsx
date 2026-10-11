@@ -172,7 +172,6 @@ export function DailyHoursView({ role, userId }: { role: UserRole; userId: strin
     <div className="page-wrap">
       <PageHeading
         title="Daily Working Hours"
-        description="Hour-meter readings captured per machine, per day."
       />
 
       <ExportBar />
