@@ -199,6 +199,13 @@ nav { flex: 1; }.nav-group { margin-bottom: 21px; }.nav-group > small { display:
 .fleet-map-message.error { color: #a7433d; }
 .fleet-map-unlocated { display: flex; flex-direction: column; gap: 4px; max-height: 130px; overflow-y: auto; margin-top: 12px; padding: 10px 12px; color: var(--muted-foreground); background: #f7f9f9; border-radius: 6px; font-size: 11px; }
 .fleet-map-unlocated b { color: var(--foreground); }
+.fleet-map-summary { display: flex; flex-direction: column; gap: 10px; margin-bottom: 12px; }
+.fleet-map-summary-cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.fleet-map-summary-cards > div { display: flex; flex-direction: column; gap: 5px; padding: 10px 12px; background: #f7f9f9; border: 1px solid var(--border); border-radius: 7px; }
+.fleet-map-summary-cards span { color: var(--muted-foreground); font-size: 11px; }
+.fleet-map-summary-cards b { color: var(--foreground); font-size: 18px; }
+.fleet-map-sites { padding: 0; }
+.fleet-map-sites .dashboard-map-summary-layout { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
 .daily-hours-entry { margin-bottom: 14px; }
 .lifecycle-selector { margin-bottom: 14px; }
 .lifecycle-timeline { padding: 16px; }
@@ -1212,6 +1219,7 @@ body {
 }
 
 @media (max-width: 600px) {
+  .fleet-map-summary { grid-template-columns: minmax(0, 1fr); }
   .dashboard-map-content { gap: 12px; padding: 0 14px 14px; }
   .dashboard-map-summary-layout { gap: 12px; }
   .dashboard-map-summary ul { gap: 7px; }

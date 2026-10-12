@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { PieChart } from '@mui/x-charts/PieChart'
 import { LocateFixed, MapPin, Minus, Plus } from 'lucide-react'
 import { LoadingSpinner, Modal } from '@/components/shared'
 
@@ -24,6 +25,7 @@ type GeocodeResult = { latitude: number; longitude: number } | null
 
 const geocodeCache = new Map<string, GeocodeResult>()
 const TILE_SIZE = 256
+export const FLEET_SITE_COLORS = ['#20c997', '#29b6f6', '#ffc857', '#ff6b6b', '#b388ff', '#4dd0e1']
 const ZAMBIA_BOUNDARY: readonly [number, number][] = [
   [22.00, -16.21], [23.43, -17.64], [24.71, -17.50], [25.92, -18.00],
   [27.04, -17.96], [27.82, -16.98], [28.82, -16.49], [28.93, -15.95],
@@ -196,15 +198,22 @@ export function FleetMapModal(
     return () => observer.disconnect()
   }, [active, geocoded.length])
 
-  const zoom = Math.min(maxZoom, Math.max(2, mapZoom ?? fitZoom(geocoded, mapSize, inline)))
+  const zoom = Math.min(maxZoom, Math.max(2, mapZoom ?? fitZoom(geocoded, mapSize, true)))
   const points = geocoded.map((site) => ({
     site,
     ...projectCoordinates(site.latitude, site.longitude, zoom),
   }))
+  const siteChartData = [...sites.sites]
+    .sort((a, b) => a.location.localeCompare(b.location))
+    .map((site, index) => ({
+      label: site.location,
+      value: site.machines.length,
+      color: FLEET_SITE_COLORS[index % FLEET_SITE_COLORS.length],
+    }))
   const outlinePoints = ZAMBIA_BOUNDARY.map(([longitude, latitude]) =>
     projectCoordinates(latitude, longitude, zoom),
   )
-  const center = inline && mapZoom === null
+  const center = mapZoom === null
     ? {
         x: (Math.min(...outlinePoints.map((point) => point.x)) + Math.max(...outlinePoints.map((point) => point.x))) / 2,
         y: (Math.min(...outlinePoints.map((point) => point.y)) + Math.max(...outlinePoints.map((point) => point.y))) / 2,
@@ -275,6 +284,55 @@ export function FleetMapModal(
 
   const content = (
     <>
+      {!inline ? (
+        <div className="fleet-map-summary">
+          <div className="fleet-map-summary-cards">
+            <div><span>Machines</span><b>{machines.length}</b></div>
+            <div><span>Project sites</span><b>{sites.sites.length}</b></div>
+            <div><span>Mapped sites</span><b>{geocoded.length}</b></div>
+            <div><span>Not mapped</span><b>{unlocated.length + sites.sites
+              .filter((site) => failed.includes(site.location))
+              .reduce((total, site) => total + site.machines.length, 0)}</b></div>
+          </div>
+          {sites.sites.length > 0 ? (
+            <div className="dashboard-map-summary fleet-map-sites">
+              <div className="dashboard-map-summary-layout">
+                <PieChart
+                  className="dashboard-site-chart"
+                  series={[{
+                    innerRadius: 30,
+                    outerRadius: 100,
+                    paddingAngle: 5,
+                    cornerRadius: 5,
+                    startAngle: -45,
+                    endAngle: 225,
+                    cx: 150,
+                    cy: 150,
+                    data: siteChartData,
+                    arcLabel: 'value',
+                    arcLabelMinAngle: 15,
+                  }]}
+                  width={300}
+                  height={300}
+                  hideLegend
+                />
+                <ul className="dashboard-site-legend">
+                  {siteChartData.map((site) => (
+                    <li key={site.label}>
+                      <i
+                        className="dashboard-site-dot"
+                        style={{ backgroundColor: site.color }}
+                        aria-hidden="true"
+                      />
+                      <span>{site.label} · {site.value}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
       {loading && geocoded.length === 0 ? (
         <div className="fleet-map-loading">
           <LoadingSpinner />
@@ -307,18 +365,16 @@ export function FleetMapModal(
               style={{ left: tile.x, top: tile.y }}
             />
           ))}
-          {inline ? (
-            <svg
-              className="fleet-map-country-outline"
-              width={mapSize.width}
-              height={mapSize.height}
-              aria-hidden="true"
-            >
-              <path
-                d={`${outlinePoints.map((point, index) => `${index === 0 ? 'M' : 'L'} ${point.x - left} ${point.y - top}`).join(' ')} Z`}
-              />
-            </svg>
-          ) : null}
+          <svg
+            className="fleet-map-country-outline"
+            width={mapSize.width}
+            height={mapSize.height}
+            aria-hidden="true"
+          >
+            <path
+              d={`${outlinePoints.map((point, index) => `${index === 0 ? 'M' : 'L'} ${point.x - left} ${point.y - top}`).join(' ')} Z`}
+            />
+          </svg>
           {points.map(({ site, x, y }) => {
             const locationKey = site.location.toLocaleLowerCase()
             const selected = selectedLocation === locationKey

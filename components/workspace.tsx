@@ -348,7 +348,7 @@ function ActiveView({
     case 'Repairs':
       return <RepairsView role={role} userId={userId} />
     case 'Notifications':
-      return <NotificationsView />
+      return <NotificationsView role={role} />
     case 'Audit Log':
       return <AuditView />
     case 'Settings':

@@ -37,6 +37,10 @@ const SELECT =
   'id,name,customer_id,site_location,deployment_start,deployment_end,status,created_at,customer:customer_id(company_name)'
 const SELECT_WITHOUT_STATUS =
   'id,name,customer_id,site_location,deployment_start,deployment_end,created_at,customer:customer_id(company_name)'
+const SELECT_WITHOUT_CUSTOMER =
+  'id,name,customer_id,site_location,deployment_start,deployment_end,status,created_at'
+const SELECT_WITHOUT_CUSTOMER_OR_STATUS =
+  'id,name,customer_id,site_location,deployment_start,deployment_end,created_at'
 
 function projectStatusLabel(status: Project['status']): string {
   return status === 'not_started' ? 'Not started' : status === 'ongoing' ? 'Ongoing' : 'Completed'
@@ -70,10 +74,15 @@ export function ProjectsView({ role, userId }: { role: UserRole; userId: string 
   const [statusColumnAvailable, setStatusColumnAvailable] = useState<boolean | null>(null)
   const canManage = canManageProjects(role)
   const canViewCustomers = canAccess('Customers & Contracts', role)
+  const canLookupProjectCustomers = canViewCustomers || role === 'operations_manager'
 
   const projects = useQuery<Project[]>(
     async () => {
-      const select = canViewCustomers ? SELECT : SELECT.replace(',customer:customer_id(company_name)', '')
+      const select = canViewCustomers
+        ? SELECT
+        : canLookupProjectCustomers
+          ? SELECT_WITHOUT_CUSTOMER
+          : SELECT_WITHOUT_CUSTOMER.replace(',customer_id', '')
       const result = await supabase
         .from('project')
         .select(select)
@@ -81,9 +90,24 @@ export function ProjectsView({ role, userId }: { role: UserRole; userId: string 
 
       if (!result.error) {
         setStatusColumnAvailable(true)
+        if (role === 'operations_manager' && result.data) {
+          const options = await supabase.rpc('list_project_customer_options') as unknown as {
+            data: CustomerPick[] | null
+            error: unknown
+          }
+          if (options.error) return { data: null, error: options.error }
+          const customerById = new Map((options.data ?? []).map((customer) => [customer.id, customer]))
+          return {
+            ...result,
+            data: result.data.map((project) => ({
+              ...project,
+              customer: project.customer_id ? customerById.get(project.customer_id) ?? null : null,
+            })),
+          }
+        }
         return {
           ...result,
-          data: !canViewCustomers && result.data
+          data: !canLookupProjectCustomers && result.data
             ? result.data.map((project) => ({ ...project, customer: null }))
             : result.data,
         }
@@ -95,7 +119,9 @@ export function ProjectsView({ role, userId }: { role: UserRole; userId: string 
 
       const fallbackSelect = canViewCustomers
         ? SELECT_WITHOUT_STATUS
-        : SELECT_WITHOUT_STATUS.replace(',customer:customer_id(company_name)', '')
+        : canLookupProjectCustomers
+          ? SELECT_WITHOUT_CUSTOMER_OR_STATUS
+          : SELECT_WITHOUT_CUSTOMER_OR_STATUS.replace(',customer_id', '')
       const fallback = await supabase
         .from('project')
         .select(fallbackSelect)
@@ -106,16 +132,32 @@ export function ProjectsView({ role, userId }: { role: UserRole; userId: string 
       }
 
       setStatusColumnAvailable(false)
+      if (role === 'operations_manager') {
+        const options = await supabase.rpc('list_project_customer_options') as unknown as {
+          data: CustomerPick[] | null
+          error: unknown
+        }
+        if (options.error) return { data: null, error: options.error }
+        const customerById = new Map((options.data ?? []).map((customer) => [customer.id, customer]))
+        return {
+          data: fallback.data.map((project) => ({
+            ...project,
+            customer: project.customer_id ? customerById.get(project.customer_id) ?? null : null,
+            status: statusFromDates(project),
+          })),
+          error: null,
+        }
+      }
       return {
         data: fallback.data.map((project) => ({
           ...project,
-          customer: canViewCustomers ? project.customer : null,
+          customer: canLookupProjectCustomers ? project.customer : null,
           status: statusFromDates(project),
         })),
         error: null,
       }
     },
-    [],
+    [role],
   )
 
   const rows = useMemo(() => {
@@ -268,6 +310,7 @@ export function ProjectsView({ role, userId }: { role: UserRole; userId: string 
         <ProjectFormModal
           state={form}
           userId={userId}
+          role={role}
           statusColumnAvailable={statusColumnAvailable === true}
           onClose={() => setForm(null)}
           onSaved={() => {
@@ -519,12 +562,14 @@ function ProjectDetailModal({
 function ProjectFormModal({
   state,
   userId,
+  role,
   statusColumnAvailable,
   onClose,
   onSaved,
 }: {
   state: { mode: 'add' | 'edit'; row: Project | null } | null
   userId: string
+  role: UserRole
   statusColumnAvailable: boolean
   onClose: () => void
   onSaved: () => void
@@ -537,17 +582,21 @@ function ProjectFormModal({
   const [formError, setFormError] = useState('')
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
 
-  // Customers the signed-in role can read (RLS applies). Operations managers
-  // may see none : in that case a project is simply created without a customer.
   const customers = useQuery<CustomerPick[]>(
-    () =>
-      !open
-        ? Promise.resolve({ data: [], error: null })
-        : (supabase
-            .from('customer')
-            .select('id,company_name')
-            .order('company_name') as unknown as PromiseLike<{ data: CustomerPick[] | null; error: unknown }>),
-    [open],
+    async () => {
+      if (!open) return { data: [], error: null }
+      if (role === 'operations_manager') {
+        return await supabase.rpc('list_project_customer_options') as unknown as {
+          data: CustomerPick[] | null
+          error: unknown
+        }
+      }
+      return await supabase
+        .from('customer')
+        .select('id,company_name')
+        .order('company_name') as unknown as { data: CustomerPick[] | null; error: unknown }
+    },
+    [open, role],
   )
 
   useEffect(() => {
@@ -570,6 +619,10 @@ function ProjectFormModal({
   }
 
   async function submit() {
+    if (role === 'operations_manager' && customers.status !== 'ready') {
+      setFormError('Customer options are not available yet. Please retry before saving.')
+      return
+    }
     const errors: Record<string, string> = {}
     if (!form.name?.trim()) errors.name = 'Project name is required.'
     if (form.deployment_start && form.deployment_end && form.deployment_end < form.deployment_start)
@@ -640,7 +693,12 @@ function ProjectFormModal({
         />
         <div className="form-field full">
           <label htmlFor="pj-customer">Customer (optional)</label>
-          <select id="pj-customer" value={form.customer_id ?? ''} onChange={(e) => set('customer_id', e.target.value)}>
+          <select
+            id="pj-customer"
+            value={form.customer_id ?? ''}
+            onChange={(e) => set('customer_id', e.target.value)}
+            disabled={customers.status !== 'ready'}
+          >
             <option value="">No customer (stand-alone site)</option>
             {(customers.data ?? []).map((c) => (
               <option key={c.id} value={c.id}>
@@ -648,8 +706,11 @@ function ProjectFormModal({
               </option>
             ))}
           </select>
+          {customers.status === 'error' && (
+            <span className="field-error">Could not load customer options. Please retry before saving.</span>
+          )}
           {customers.status === 'ready' && (customers.data ?? []).length === 0 && (
-            <span className="field-hint">No customers available to link : the project will stand alone.</span>
+            <span className="field-hint">No customers available to link; the project will stand alone.</span>
           )}
         </div>
         <Field

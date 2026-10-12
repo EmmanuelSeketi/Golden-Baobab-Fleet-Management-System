@@ -81,6 +81,7 @@ export function MaintenanceView({ role, userId }: { role: UserRole; userId: stri
   }, [records.data, filter])
   const maintenanceRows = records.data ?? []
   const dueServices = maintenanceRows.filter((record) => record.status === 'due' || record.status === 'overdue').length
+  const upcomingServices = maintenanceRows.filter((record) => record.status === 'upcoming').length
   const completedServices = maintenanceRows.filter((record) => record.status === 'completed').length
 
   return (
@@ -116,6 +117,12 @@ export function MaintenanceView({ role, userId }: { role: UserRole; userId: stri
           label="Due / overdue"
           value={records.status === 'loading' ? <LoadingSpinner small /> : records.status === 'ready' ? dueServices : 'N/A'}
           sub="needs attention"
+        />
+        <KpiCard
+          tone="blue"
+          label="Upcoming"
+          value={records.status === 'loading' ? <LoadingSpinner small /> : records.status === 'ready' ? upcomingServices : 'N/A'}
+          sub="scheduled service"
         />
         <KpiCard
           tone="green"

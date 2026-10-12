@@ -28,7 +28,10 @@ const TYPE_META: Record<EventType, { label: string; icon: React.ElementType; ton
 const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 
 function iso(d: Date) {
-  return d.toISOString().slice(0, 10)
+  const year = d.getFullYear()
+  const month = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
 }
 function monthLabel(d: Date) {
   return d.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' })
@@ -124,7 +127,7 @@ export function CalendarView() {
       ? 'loading'
       : services.error || repairs.error || assignments.error
         ? 'error'
-        : 'success'
+        : 'ready'
   const firstError = services.error || repairs.error || assignments.error
 
   const events = useMemo<CalEvent[]>(() => {
@@ -246,6 +249,7 @@ export function CalendarView() {
           error={firstError}
           isEmpty={false}
           title="calendar"
+          emptyText="No calendar events in this view."
           onRetry={() => {
             services.reload()
             repairs.reload()

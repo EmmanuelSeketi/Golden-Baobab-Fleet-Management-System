@@ -14,7 +14,7 @@ import {
   titleCase,
 } from '@/lib/gbi/format'
 import { KpiCard, LoadingSpinner, MiniState, PageHeading, StatusBadge } from '@/components/shared'
-import { FleetMapModal, type FleetMapMachine } from '@/components/views/fleet-map-modal'
+import { FLEET_SITE_COLORS, FleetMapModal, type FleetMapMachine } from '@/components/views/fleet-map-modal'
 
 type MachineStatusRow = FleetMapMachine & { current_status: string }
 type HourRow = { entry_date: string; total_hours: number | null }
@@ -41,8 +41,6 @@ const STATUS_COLORS: Record<string, string> = {
   breakdown: '#e0004d',
   parked: '#9aa9ad',
 }
-
-const SITE_COLORS = ['#20c997', '#29b6f6', '#ffc857', '#ff6b6b', '#b388ff', '#4dd0e1']
 
 function greetingFor(hour: number) {
   if (hour < 12) return 'Good morning'
@@ -161,7 +159,7 @@ export function OverviewView({ role, fullName }: { role: UserRole; fullName: str
   const siteChartData = fleetSites.map((site, index) => ({
     label: site.name,
     value: site.machineCount,
-    color: SITE_COLORS[index % SITE_COLORS.length],
+    color: FLEET_SITE_COLORS[index % FLEET_SITE_COLORS.length],
   }))
   const dueCount =
     (maintenance.data ?? []).filter((m) => m.status === 'due' || m.status === 'overdue').length
@@ -481,7 +479,7 @@ export function OverviewView({ role, fullName }: { role: UserRole; fullName: str
                       <li key={site.name}>
                         <i
                           className="dashboard-site-dot"
-                          style={{ backgroundColor: SITE_COLORS[index % SITE_COLORS.length] }}
+                          style={{ backgroundColor: FLEET_SITE_COLORS[index % FLEET_SITE_COLORS.length] }}
                           aria-hidden="true"
                         />
                         <span>{site.name}</span>

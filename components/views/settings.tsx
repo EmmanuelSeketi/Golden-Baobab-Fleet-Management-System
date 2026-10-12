@@ -7,7 +7,6 @@ import {
   Download,
   Info,
   Pencil,
-  Settings2,
   ShieldCheck,
   Users,
 } from 'lucide-react'
@@ -19,7 +18,7 @@ import { DetailGrid, Modal, PageHeading, RowActions, StatusBadge, ViewState } fr
 
 const ROLES: UserRole[] = ['administrator', 'operations_manager', 'management', 'accounts_billing']
 
-type Tab = 'users' | 'system' | 'backup'
+type Tab = 'users' | 'backup'
 
 export function SettingsView({ userId }: { userId: string }) {
   const [tab, setTab] = useState<Tab>('users')
@@ -36,10 +35,6 @@ export function SettingsView({ userId }: { userId: string }) {
             <Users size={14} />
             Users & roles
           </button>
-          <button className={tab === 'system' ? 'active' : ''} onClick={() => setTab('system')}>
-            <Settings2 size={14} />
-            System settings
-          </button>
           <button className={tab === 'backup' ? 'active' : ''} onClick={() => setTab('backup')}>
             <DatabaseBackup size={14} />
             Backup & export
@@ -48,7 +43,6 @@ export function SettingsView({ userId }: { userId: string }) {
       </div>
 
       {tab === 'users' && <UsersPanel currentUserId={userId} />}
-      {tab === 'system' && <SystemPanel userId={userId} />}
       {tab === 'backup' && <BackupPanel />}
     </div>
   )
@@ -242,186 +236,6 @@ function UserEditModal({
             <option value="active">Active</option>
             <option value="inactive">Inactive</option>
           </select>
-        </div>
-      </div>
-    </Modal>
-  )
-}
-
-// ---------------------------------------------------------------------------
-// System settings
-// ---------------------------------------------------------------------------
-
-type SettingRow = { key: string; value: unknown; updated_at: string }
-
-// Friendly labels/descriptions for known settings; unknown keys still editable.
-const SETTING_META: Record<string, { label: string; help: string; unit?: string }> = {
-  daily_hour_photo_retention_days: {
-    label: 'Daily-hour photo retention',
-    help: 'How long uploaded hour-meter photos are kept before they can be purged.',
-    unit: 'days',
-  },
-}
-
-function SystemPanel({ userId }: { userId: string }) {
-  const supabase = useSupabase()
-  const [editing, setEditing] = useState<SettingRow | null>(null)
-
-  const settings = useQuery<SettingRow[]>(
-    () =>
-      supabase.from('system_setting').select('key,value,updated_at').order('key') as unknown as PromiseLike<{
-        data: SettingRow[] | null
-        error: unknown
-      }>,
-    [],
-  )
-
-  return (
-    <>
-      <div className="panel">
-        <ViewState
-          status={settings.status}
-          error={settings.error}
-          isEmpty={(settings.data ?? []).length === 0}
-          title="system settings"
-          emptyText="No system settings configured."
-          onRetry={settings.reload}
-        >
-          <div className="settings-list">
-            {(settings.data ?? []).map((s) => {
-              const meta = SETTING_META[s.key]
-              return (
-                <div className="settings-row" key={s.key}>
-                  <div>
-                    <b>{meta?.label ?? s.key}</b>
-                    <span>{meta?.help ?? 'Custom configuration value.'}</span>
-                    <code className="settings-key">{s.key}</code>
-                  </div>
-                  <div className="settings-value">
-                    <b>
-                      {formatValue(s.value)}
-                      {meta?.unit ? ` ${meta.unit}` : ''}
-                    </b>
-                    <button className="button button-secondary button-sm" onClick={() => setEditing(s)}>
-                      <Pencil size={13} />
-                      Edit
-                    </button>
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        </ViewState>
-      </div>
-
-      <SettingEditModal
-        setting={editing}
-        userId={userId}
-        onClose={() => setEditing(null)}
-        onSaved={() => {
-          setEditing(null)
-          settings.reload()
-        }}
-      />
-    </>
-  )
-}
-
-function formatValue(v: unknown): string {
-  if (v == null) return 'N/A'
-  if (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean') return String(v)
-  return JSON.stringify(v)
-}
-
-function SettingEditModal({
-  setting,
-  userId,
-  onClose,
-  onSaved,
-}: {
-  setting: SettingRow | null
-  userId: string
-  onClose: () => void
-  onSaved: () => void
-}) {
-  const supabase = useSupabase()
-  const [value, setValue] = useState('')
-  const [saving, setSaving] = useState(false)
-  const [error, setError] = useState('')
-
-  useEffect(() => {
-    if (!setting) return
-    setValue(formatValue(setting.value))
-    setError('')
-  }, [setting])
-
-  if (!setting) return null
-  const meta = SETTING_META[setting.key]
-
-  async function submit() {
-    if (!value.trim()) return setError('A value is required.')
-    // Preserve the JSON type of the existing value: numeric stays numeric,
-    // booleans stay boolean, otherwise store as a JSON string.
-    let payload: unknown = value.trim()
-    if (typeof setting!.value === 'number') {
-      const n = Number(value)
-      if (Number.isNaN(n)) return setError('This setting expects a number.')
-      payload = n
-    } else if (typeof setting!.value === 'boolean') {
-      payload = value.trim().toLowerCase() === 'true'
-    }
-
-    setSaving(true)
-    setError('')
-    const { error: upErr } = await supabase
-      .from('system_setting')
-      .update({ value: payload, updated_by: userId, updated_at: new Date().toISOString() })
-      .eq('key', setting!.key)
-    setSaving(false)
-    if (upErr) {
-      setError(
-        /permission|policy|rls|denied/i.test((upErr as { message?: string }).message ?? '')
-          ? 'You do not have permission to change system settings.'
-          : 'Could not save this setting. Please try again.',
-      )
-      return
-    }
-    onSaved()
-  }
-
-  return (
-    <Modal
-      open={!!setting}
-      onClose={saving ? () => {} : onClose}
-      eyebrow="System setting"
-      title={meta?.label ?? setting.key}
-      subtitle={meta?.help}
-      footer={
-        <div className="footer-actions">
-          <button className="button button-secondary" onClick={onClose} disabled={saving}>
-            Cancel
-          </button>
-          <button className="button button-primary" onClick={submit} disabled={saving}>
-            {saving ? 'Saving…' : 'Save setting'}
-          </button>
-        </div>
-      }
-    >
-      <div className="form-grid">
-        {error && (
-          <div className="form-error">
-            <AlertTriangle size={15} />
-            {error}
-          </div>
-        )}
-        <div className="form-field full">
-          <label>
-            Value{meta?.unit ? ` (${meta.unit})` : ''}
-          </label>
-          <input value={value} onChange={(e) => setValue(e.target.value)} />
-          <span className="field-hint">
-            Key: <code>{setting.key}</code>
-          </span>
         </div>
       </div>
     </Modal>
