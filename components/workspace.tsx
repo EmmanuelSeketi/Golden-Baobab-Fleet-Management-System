@@ -84,7 +84,7 @@ const NAV: NavGroup[] = [
     zh: '商务',
     items: [
       { module: 'Customers & Contracts', label: 'Customers & Contracts', zh: '客户与合同', iconSrc: '/icons/Contracts.svg' },
-      { module: 'Hiring Quotations', label: 'Hiring Quotations', zh: '租赁报价', icon: FileText },
+      { module: 'Hiring Quotations', label: 'Invoice', zh: '发票', icon: FileText },
       { module: 'Reports', label: 'Reports', zh: '报表', icon: BarChart3 },
     ],
   },

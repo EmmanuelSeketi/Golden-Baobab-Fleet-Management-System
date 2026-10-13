@@ -101,12 +101,12 @@ export function BillingView({ role, userId }: { role: UserRole; userId: string }
   return (
     <div className="page-wrap">
       <PageHeading
-        title="Hiring Quotations"
+        title="Invoice"
         action={
           canManage ? (
             <button className="button button-primary" onClick={() => setCreating(true)}>
               <Plus size={15} />
-              New hiring quotation
+              New invoice
             </button>
           ) : undefined
         }
@@ -115,19 +115,19 @@ export function BillingView({ role, userId }: { role: UserRole; userId: string }
       <div className="kpi-grid">
         <KpiCard
           tone="gold"
-          label="Hiring quotations"
+          label="Invoices"
           value={quotations.status === 'loading' ? <LoadingSpinner small /> : quotations.status === 'ready' ? rows.length : 'N/A'}
-          sub="saved quotation history"
+          sub="saved invoice history"
         />
         <KpiCard
           tone="blue"
           label="This month"
           value={quotations.status === 'loading' ? <LoadingSpinner small /> : quotations.status === 'ready' ? thisMonthCount : 'N/A'}
-          sub="quotations issued"
+          sub="invoices issued"
         />
         <KpiCard
           tone="green"
-          label="Customers quoted"
+          label="Customers invoiced"
           value={quotations.status === 'loading' ? <LoadingSpinner small /> : quotations.status === 'ready' ? customerCount : 'N/A'}
           sub="distinct lessees"
         />
@@ -138,15 +138,15 @@ export function BillingView({ role, userId }: { role: UserRole; userId: string }
           status={quotations.status}
           error={quotations.error}
           isEmpty={rows.length === 0}
-          title="hiring quotations"
-          emptyText="No hiring quotations have been saved yet."
+          title="invoices"
+          emptyText="No invoices have been saved yet."
           onRetry={quotations.reload}
         >
           <div className="table-scroll">
             <table className="data-table">
               <thead>
                 <tr>
-                  <th>Quotation</th>
+                  <th>Invoice</th>
                   <th>Date</th>
                   <th>Leasee / customer</th>
                   <th>Project</th>
@@ -222,7 +222,7 @@ function QuotationDetailModal({ quotation, onClose }: { quotation: Quotation | n
     <Modal
       open={quotation !== null}
       onClose={onClose}
-      eyebrow="Hiring quotation history"
+      eyebrow="Invoice history"
       title={quotation?.quotation_number ?? ''}
       subtitle={quotation?.customer_name}
       footer={
@@ -230,7 +230,7 @@ function QuotationDetailModal({ quotation, onClose }: { quotation: Quotation | n
           <div className="modal-foot-actions">
             <button className="button button-secondary" onClick={download} disabled={items.status !== 'ready' || downloading}>
               <FileText size={14} />
-              {downloading ? 'Generating…' : 'Download quotation'}
+              {downloading ? 'Generating…' : 'Download invoice'}
             </button>
           </div>
         ) : undefined

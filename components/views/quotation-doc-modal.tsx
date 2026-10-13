@@ -229,7 +229,7 @@ export function QuotationDocModal({
       onClose()
       return true
     } catch {
-      setError('The quotation was saved, but its document could not be generated. Use Download quotation to try again.')
+      setError('The invoice was saved, but its document could not be generated. Use Download invoice to try again.')
       return false
     }
   }
@@ -312,8 +312,8 @@ export function QuotationDocModal({
       open={open}
       onClose={saving ? () => {} : onClose}
       eyebrow="Commercial"
-      title={savedQuotation ? 'Quotation saved' : 'New hiring quotation'}
-      subtitle="The document shows the lessee and quoted machines. Project and contract are retained in the app history."
+      title={savedQuotation ? 'Invoice saved' : 'New invoice'}
+      subtitle="The document shows the lessee and invoiced machines. Project and contract are retained in the app history."
       footer={
         <div className="modal-foot-actions" style={{ marginLeft: 'auto' }}>
           <button className="button button-secondary" onClick={onClose} disabled={saving}>
@@ -321,7 +321,7 @@ export function QuotationDocModal({
           </button>
           <button className="button button-primary" onClick={submit} disabled={saving || customers.status !== 'ready'}>
             <Download size={14} />
-            {saving ? 'Saving…' : savedQuotation ? 'Download quotation' : 'Save & download'}
+            {saving ? 'Saving…' : savedQuotation ? 'Download invoice' : 'Save & download'}
           </button>
         </div>
       }
@@ -333,7 +333,7 @@ export function QuotationDocModal({
         </div>
       )}
       {savedQuotation ? (
-        <p className="form-success">Quotation {quotationNumber} has been saved to history.</p>
+        <p className="form-success">Invoice {quotationNumber} has been saved to history.</p>
       ) : (
         <>
           <div className="form-grid">
