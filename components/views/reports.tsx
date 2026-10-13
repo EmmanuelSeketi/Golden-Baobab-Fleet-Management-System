@@ -109,6 +109,7 @@ export function ReportsView({ role }: { role: UserRole }) {
                 error={hours.error}
                 isEmpty={monthlyHours.length === 0}
                 emptyText="No hours recorded in this window."
+                loadingVariant="chart"
               />
             ) : (
               <div className="mini-bars labelled">
@@ -138,6 +139,7 @@ export function ReportsView({ role }: { role: UserRole }) {
                   error={invoices.error}
                   isEmpty={monthlyRevenue.length === 0}
                   emptyText="No invoices in this window."
+                  loadingVariant="chart"
                 />
               ) : (
                 <div className="mini-bars labelled">

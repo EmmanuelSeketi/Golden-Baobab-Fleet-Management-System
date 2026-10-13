@@ -249,6 +249,7 @@ export function CalendarView() {
           error={firstError}
           isEmpty={false}
           title="calendar"
+          loadingVariant="calendar"
           emptyText="No calendar events in this view."
           onRetry={() => {
             services.reload()

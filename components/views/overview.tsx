@@ -298,6 +298,7 @@ export function OverviewView({ role, fullName }: { role: UserRole; fullName: str
                 error={hours.error}
                 isEmpty={chartData.length === 0}
                 emptyText="No hour entries recorded in the last 14 days."
+                loadingVariant="chart"
               />
             ) : (
               <svg

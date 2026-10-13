@@ -193,6 +193,7 @@ export function NotificationsView({ role }: { role: UserRole }) {
           error={error}
           isEmpty={rows.length === 0}
           title="notifications"
+          loadingVariant="list"
           emptyTitle="You're all caught up"
           emptyText="No notifications to show."
           onRetry={() => {

@@ -364,6 +364,7 @@ export function MachineHistoryView() {
               error={firstError}
               isEmpty={visible.length === 0}
               title="machine history"
+              loadingVariant="timeline"
               emptyText={
                 events.length === 0
                   ? 'No activity recorded for this machine yet.'

@@ -91,6 +91,100 @@ export function LoadingSpinner({ label = 'Loading', small = false }: { label?: s
   )
 }
 
+type SkeletonVariant = 'table' | 'list' | 'calendar' | 'timeline'
+
+export function LoadingSkeleton({
+  label,
+  variant = 'table',
+  columns = 6,
+}: {
+  label: string
+  variant?: SkeletonVariant
+  columns?: number
+}) {
+  const columnIndices = Array.from({ length: columns }, (_, index) => index)
+
+  return (
+    <div className={`loading-skeleton loading-skeleton-${variant}`} role="status" aria-label={`Loading ${label}`}>
+      {variant === 'table' && (
+        <div className="table-scroll">
+          <table className="data-table" aria-hidden="true">
+            <thead>
+              <tr>
+                {columnIndices.map((column) => (
+                  <th key={column}>
+                    <span className="skeleton-block" style={{ width: `${[54, 72, 63, 80][column % 4]}%` }} />
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {Array.from({ length: 6 }, (_, row) => (
+                <tr key={row}>
+                  {columnIndices.map((column) => (
+                    <td key={column}>
+                      <span
+                        className="skeleton-block"
+                        style={{ width: `${[74, 52, 86, 64, 44][(row + column) % 5]}%` }}
+                      />
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {variant === 'list' && (
+        <ul className="loading-skeleton-list" aria-hidden="true">
+          {Array.from({ length: 5 }, (_, row) => (
+            <li key={row}>
+              <span className="skeleton-block skeleton-notification-icon" />
+              <span className="loading-skeleton-list-copy">
+                <span className="skeleton-block" />
+                <span className="skeleton-block" />
+                <span className="skeleton-block" />
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {variant === 'calendar' && (
+        <>
+          <div className="cal-grid cal-head" aria-hidden="true">
+            {columnIndices.slice(0, 7).map((column) => (
+              <span className="skeleton-block skeleton-weekday" key={column} />
+            ))}
+          </div>
+          <div className="cal-grid loading-skeleton-calendar-grid" aria-hidden="true">
+            {Array.from({ length: 42 }, (_, day) => (
+              <span className="loading-skeleton-calendar-cell" key={day}>
+                <span className="skeleton-block skeleton-calendar-date" />
+                {day % 3 !== 0 && <span className="skeleton-block skeleton-calendar-event" />}
+                {day % 4 === 0 && <span className="skeleton-block skeleton-calendar-event short" />}
+              </span>
+            ))}
+          </div>
+        </>
+      )}
+
+      {variant === 'timeline' && (
+        <ol className="loading-skeleton-timeline" aria-hidden="true">
+          {Array.from({ length: 5 }, (_, row) => (
+            <li key={row}>
+              <span className="skeleton-block" />
+              <span className="skeleton-block" />
+              <span className="skeleton-block" />
+            </li>
+          ))}
+        </ol>
+      )}
+    </div>
+  )
+}
+
 /**
  * Renders loading / error / empty states consistently. Only renders children
  * when the query succeeded AND returned rows, so a failed query can never fall
@@ -104,6 +198,8 @@ export function ViewState({
   emptyTitle = 'No records yet',
   emptyText,
   onRetry,
+  loadingVariant = 'table',
+  loadingColumns = 6,
   children,
 }: {
   status: QueryStatus
@@ -113,18 +209,12 @@ export function ViewState({
   emptyTitle?: string
   emptyText: string
   onRetry?: () => void
+  loadingVariant?: SkeletonVariant
+  loadingColumns?: number
   children: React.ReactNode
 }) {
   if (status === 'loading') {
-    return (
-      <div className="data-state">
-        <LoadingSpinner />
-        <div>
-          <b>Loading {title}…</b>
-          <p>Fetching live records from Supabase.</p>
-        </div>
-      </div>
-    )
+    return <LoadingSkeleton label={title} variant={loadingVariant} columns={loadingColumns} />
   }
   if (status === 'error') {
     return (
@@ -257,17 +347,30 @@ export function MiniState({
   error,
   isEmpty,
   emptyText,
+  loadingVariant = 'inline',
 }: {
   status: QueryStatus
   error: string
   isEmpty: boolean
   emptyText: string
+  loadingVariant?: 'inline' | 'chart'
 }) {
   if (status === 'loading') {
+    if (loadingVariant === 'chart') {
+      return (
+        <div className="loading-chart-skeleton" role="status" aria-label="Loading chart" aria-hidden="false">
+          <div className="loading-chart-grid" aria-hidden="true">
+            {Array.from({ length: 7 }, (_, bar) => (
+              <span className="loading-chart-bar" key={bar} style={{ height: `${[38, 64, 48, 82, 56, 72, 44][bar]}%` }} />
+            ))}
+          </div>
+        </div>
+      )
+    }
     return (
       <p className="mini-state mini-state-loading">
-        <LoadingSpinner small />
-        <span>Loading…</span>
+        <span className="skeleton-block skeleton-inline" aria-hidden="true" />
+        <span className="visually-hidden">Loading…</span>
       </p>
     )
   }
