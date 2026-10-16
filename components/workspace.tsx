@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import excavatorIcon from '@/components/icons/Excavator.svg'
 import {
   BarChart3,
   Bell,
@@ -18,10 +19,13 @@ import {
   LogOut,
   Menu,
   FileText,
+  Handshake,
   ScrollText,
   Search,
   Settings,
   Timer,
+  Truck,
+  Users,
   Wrench,
   X,
 } from 'lucide-react'
@@ -64,6 +68,8 @@ type NavItem = {
 }
 type NavGroup = { group: string; zh: string; items: NavItem[] }
 
+const excavatorUrl = typeof excavatorIcon === 'string' ? excavatorIcon : excavatorIcon?.src ?? ''
+
 const NAV: NavGroup[] = [
   {
     group: 'Workspace',
@@ -71,11 +77,11 @@ const NAV: NavGroup[] = [
     items: [
       { module: 'Overview', label: 'Dashboard', zh: '仪表板', icon: LayoutDashboard },
       { module: 'Daily Hours', label: 'Daily Working Hours', zh: '每日工时', icon: Clock },
-      { module: 'Fleet', label: 'Fleet Register', zh: '车队登记', iconSrc: '/icons/fleet.svg' },
+      { module: 'Fleet', label: 'Fleet Register', zh: '车队登记', iconSrc: excavatorUrl },
       { module: 'Projects', label: 'Projects & Sites', zh: '项目与工地', icon: FolderKanban },
       { module: 'Equipment Lifecycle', label: 'Equipment Lifecycle', zh: '设备生命周期', icon: ClipboardCheck },
       { module: 'Machine History', label: 'Machine History', zh: '机器历史', icon: History },
-      { module: 'Operators', label: 'Operators', zh: '操作员', iconSrc: '/icons/operator.svg' },
+      { module: 'Operators', label: 'Operators', zh: '操作员', icon: Users },
       { module: 'Overtime', label: 'Operator Overtime', zh: '操作员加班', icon: Timer },
     ],
   },
@@ -83,7 +89,7 @@ const NAV: NavGroup[] = [
     group: 'Commercial',
     zh: '商务',
     items: [
-      { module: 'Customers & Contracts', label: 'Customers & Contracts', zh: '客户与合同', iconSrc: '/icons/Contracts.svg' },
+      { module: 'Customers & Contracts', label: 'Customers & Contracts', zh: '客户与合同', icon: Handshake },
       { module: 'Hiring Quotations', label: 'Invoice', zh: '发票', icon: FileText },
       { module: 'Reports', label: 'Reports', zh: '报表', icon: BarChart3 },
     ],

@@ -48,6 +48,7 @@ export function KpiCard({
   icon: Icon,
   iconSrc,
   tone = 'gold',
+  iconSize = 38,
 }: {
   label: string
   value: React.ReactNode
@@ -56,13 +57,21 @@ export function KpiCard({
   icon?: React.ElementType
   iconSrc?: string
   tone?: string
+  iconSize?: number
 }) {
   return (
     <div className={`kpi-card kpi-tone-${tone}`}>
       {Icon ? (
-        <Icon size={28} className="kpi-icon" />
+        <Icon size={iconSize} className="kpi-icon" />
       ) : iconSrc ? (
-        <img src={iconSrc} alt="" width={28} height={28} className="kpi-icon" />
+        <img
+          src={iconSrc}
+          alt=""
+          width={iconSize}
+          height={iconSize}
+          className="kpi-icon"
+          style={{ width: iconSize, height: iconSize }}
+        />
       ) : null}
       <div className="kpi-copy">
         <span className="stat-label">{label}</span>

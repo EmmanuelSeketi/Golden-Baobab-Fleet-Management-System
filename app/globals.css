@@ -377,7 +377,7 @@ nav { flex: 1; }.nav-group { margin-bottom: 21px; }.nav-group > small { display:
 .modal-section-head h3 { margin: 0; padding: 0; border: 0; }
 .modal-section h3 { display: flex; align-items: center; gap: 8px; font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: #61716a; margin: 0; }
 .modal-section-content { display: flex; flex-direction: column; gap: 8px; }
-.operator-profile-image img { display: block; width: 100%; max-height: 280px; margin-bottom: 14px; border-radius: 9px; object-fit: cover; background: #eef3f0; }
+.operator-profile-image img { display: block; width: auto; max-width: 100%; max-height: 280px; margin: 0 0 14px; border-radius: 9px; object-fit: contain; background: #eef3f0; }
 .operator-profile-summary { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; padding: 13px 15px; border: 1px solid #e5eae7; border-radius: 11px; background: linear-gradient(110deg, #f7faf7, #fff); }
 .operator-profile-summary img, .operator-avatar-placeholder { width: 180px; height: 120px; flex: 0 0 180px; border-radius: 9px; object-fit: cover; }
 .operator-avatar-placeholder { display: grid; place-items: center; background: #e8efe9; color: #2f6b3d; font-size: 16px; font-weight: 700; }
@@ -1143,7 +1143,7 @@ body {
 .fleet-machine-table-cell { display: flex; align-items: center; gap: 10px; min-width: 150px; }
 .fleet-machine-thumb { display: grid; place-items: center; width: 44px; height: 38px; flex: 0 0 auto; border-radius: 6px; object-fit: cover; background: #eef3f0; }
 .fleet-machine-thumb-empty { color: #819189; }
-.fleet-machine-detail-image { display: block; width: 100%; max-height: 280px; margin-bottom: 16px; border-radius: 9px; object-fit: cover; background: #eef3f0; }
+.fleet-machine-detail-image { display: block; width: auto; max-width: 100%; max-height: 280px; margin: 0 0 16px; border-radius: 9px; object-fit: contain; background: #eef3f0; }
 .fleet-machine-photo-editor { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; }
 .fleet-machine-photo-editor > img, .fleet-machine-photo-empty { display: grid; place-items: center; width: 180px; height: 120px; border-radius: 8px; object-fit: cover; background: #eef3f0; }
 .fleet-machine-photo-empty { gap: 7px; color: #819189; font-size: 11px; }

@@ -1,6 +1,11 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
+import excavatorIcon from '@/components/icons/Excavator.svg'
+import paymentIcon from '@/components/icons/payment.svg'
+import serviceIcon from '@/components/icons/Service.svg'
+import unbilledIcon from '@/components/icons/Unbilled hour entries.svg'
+import { FileText } from 'lucide-react'
 import { PieChart } from '@mui/x-charts/PieChart'
 import { useSupabase } from '@/lib/supabase/use-supabase'
 import { useQuery } from '@/lib/gbi/use-query'
@@ -32,6 +37,11 @@ type RecentRow = {
   machine: { machine_number: string } | null
   operator: { full_name: string } | null
 }
+
+const excavatorUrl = typeof excavatorIcon === 'string' ? excavatorIcon : excavatorIcon?.src ?? ''
+const paymentUrl = typeof paymentIcon === 'string' ? paymentIcon : paymentIcon?.src ?? ''
+const unbilledUrl = typeof unbilledIcon === 'string' ? unbilledIcon : unbilledIcon?.src ?? ''
+const serviceUrl = typeof serviceIcon === 'string' ? serviceIcon : serviceIcon?.src ?? ''
 
 const STATUS_COLORS: Record<string, string> = {
   on_hire: '#29b6f6',
@@ -242,33 +252,38 @@ export function OverviewView({ role, fullName }: { role: UserRole; fullName: str
           tone="green"
           label="Active machines"
           value={machines.status === 'loading' ? <LoadingSpinner small /> : machines.status === 'ready' ? `${activeMachines}` : 'N/A'}
-          iconSrc="/icons/excavator.svg"
+          iconSrc={excavatorUrl}
+          iconSize={42}
         />
         <KpiCard
           tone="blue"
           label="Unbilled hour entries"
           value={unbilled.status === 'loading' ? <LoadingSpinner small /> : unbilled.status === 'ready' ? `${unbilled.data}` : 'N/A'}
-          iconSrc="/icons/bill.svg"
+          iconSrc={unbilledUrl}
+          iconSize={38}
         />
         <KpiCard
           tone="red"
           label="Service due / overdue"
           value={maintenance.status === 'loading' ? <LoadingSpinner small /> : maintenance.status === 'ready' ? `${dueCount}` : 'N/A'}
-          iconSrc="/icons/service.svg"
+          iconSrc={serviceUrl}
+          iconSize={42}
         />
         {showCommercial ? (
           <KpiCard
             tone="gold"
             label="Outstanding invoices"
             value={outstanding.status === 'loading' ? <LoadingSpinner small /> : outstanding.status === 'ready' ? money(outstanding.data) : 'N/A'}
-            iconSrc="/icons/invoice.svg"
+            iconSrc={paymentUrl}
+            iconSize={46}
           />
         ) : (
           <KpiCard
             tone="gold"
             label="Fleet size"
             value={machines.status === 'loading' ? <LoadingSpinner small /> : machines.status === 'ready' ? `${fleetTotal}` : 'N/A'}
-            iconSrc="/icons/invoice.svg"
+            icon={FileText}
+            iconSize={38}
           />
         )}
       </div>
