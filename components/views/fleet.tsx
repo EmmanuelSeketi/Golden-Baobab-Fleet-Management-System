@@ -39,6 +39,7 @@ type Machine = {
   purchase_date: string | null
   purchase_price: number | null
   current_status: string
+  machine_location: string | null
   assigned_operator_id: string | null
   current_project_id: string | null
   operator: { full_name: string } | null
@@ -46,7 +47,18 @@ type Machine = {
 }
 
 const LIST_SELECT =
-  'id,machine_number,asset_number,registration_number,chassis_number,engine_number,machine_type,machine_image_path,manufacturer,brand,model,year,current_hour_meter,service_interval_hours,purchase_date,purchase_price,current_status,assigned_operator_id,current_project_id,operator:assigned_operator_id(full_name),project:current_project_id(name,site_location)'
+  'id,machine_number,asset_number,registration_number,chassis_number,engine_number,machine_type,machine_image_path,manufacturer,brand,model,year,current_hour_meter,service_interval_hours,purchase_date,purchase_price,current_status,machine_location,assigned_operator_id,current_project_id,operator:assigned_operator_id(full_name),project:current_project_id(name,site_location)'
+const LEGACY_LIST_SELECT = LIST_SELECT.replace('machine_location,', '')
+
+function isMissingMachineLocationColumn(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false
+  const { code, message } = error as { code?: unknown; message?: unknown }
+  return (
+    (code === '42703' || code === 'PGRST204') &&
+    typeof message === 'string' &&
+    message.toLowerCase().includes('machine_location')
+  )
+}
 
 const MACHINE_STATUSES = [
   'available',
@@ -70,12 +82,33 @@ export function FleetView({ role, userId }: { role: UserRole; userId: string }) 
   const canManage = canManageOps(role)
 
   const machines = useQuery<Machine[]>(
-    () =>
-      supabase
+    async () => {
+      const result = await supabase
         .from('machine')
         .select(LIST_SELECT)
         .is('deleted_at', null)
-        .order('machine_number') as unknown as PromiseLike<{ data: Machine[] | null; error: unknown }>,
+        .order('machine_number')
+      if (!isMissingMachineLocationColumn(result.error)) {
+        return result as unknown as { data: Machine[] | null; error: unknown }
+      }
+
+      const legacyResult = await supabase
+        .from('machine')
+        .select(LEGACY_LIST_SELECT)
+        .is('deleted_at', null)
+        .order('machine_number')
+      if (legacyResult.error) {
+        return legacyResult as unknown as { data: Machine[] | null; error: unknown }
+      }
+      const legacyMachines = (legacyResult.data ?? []) as unknown as Machine[]
+      return {
+        data: legacyMachines.map((machine) => ({
+          ...machine,
+          machine_location: null,
+        })),
+        error: null,
+      }
+    },
     [],
   )
 
@@ -238,7 +271,10 @@ export function FleetView({ role, userId }: { role: UserRole; userId: string }) 
                     <td>{m.machine_type}</td>
                     <td className="mono num">{meter(m.current_hour_meter)}</td>
                     <td>{m.operator?.full_name ?? 'N/A'}</td>
-                    <td>{m.project?.name ?? 'N/A'}</td>
+                    <td>
+                      {m.project?.name ?? 'N/A'}
+                      <div className="muted-cell">{m.machine_location ?? m.project?.site_location ?? 'No location recorded'}</div>
+                    </td>
                     <td>
                       <StatusBadge tone={machineStatusTone(m.current_status)}>
                         {titleCase(m.current_status)}
@@ -485,18 +521,18 @@ function MachineModal({
               ['Service interval', machine.service_interval_hours ? `${machine.service_interval_hours} h` : 'N/A'],
               ['Current operator', machine.operator?.full_name ?? 'N/A'],
               ['Current project', machine.project?.name ?? 'N/A'],
-              ['Site', machine.project?.site_location ?? 'N/A'],
+              ['Machine location', machine.machine_location ?? machine.project?.site_location ?? 'N/A'],
               ['Purchase date', shortDate(machine.purchase_date)],
               ['Purchase price', money(machine.purchase_price)],
             ]}
           />
 
-          <ModalSection title="Current site location">
-            {machine.project?.site_location ? (
+          <ModalSection title="Current machine location">
+            {machine.machine_location ?? machine.project?.site_location ? (
               <iframe
                 className="machine-location-map"
-                title={`Map showing ${machine.project.site_location}`}
-                src={`https://www.google.com/maps?q=${encodeURIComponent(`${machine.project.site_location}, Zambia`)}&output=embed`}
+                title={`Map showing ${machine.machine_location ?? machine.project?.site_location}`}
+                src={`https://www.google.com/maps?q=${encodeURIComponent(`${machine.machine_location ?? machine.project?.site_location}, Zambia`)}&output=embed`}
                 loading="lazy"
                 referrerPolicy="no-referrer-when-downgrade"
               />
@@ -663,6 +699,7 @@ function MachineFormModal({
         current_hour_meter: str(machine.current_hour_meter),
         service_interval_hours: str(machine.service_interval_hours),
         current_status: machine.current_status ?? 'available',
+        machine_location: str(machine.machine_location),
         assigned_operator_id: str(machine.assigned_operator_id),
         current_project_id: str(machine.current_project_id),
       })
@@ -729,6 +766,7 @@ function MachineFormModal({
       current_hour_meter: num('current_hour_meter') ?? 0,
       service_interval_hours: num('service_interval_hours'),
       current_status: form.current_status || 'available',
+      machine_location: text('machine_location'),
       assigned_operator_id: text('assigned_operator_id'),
       current_project_id: text('current_project_id'),
     }
@@ -937,6 +975,12 @@ function MachineFormModal({
         <Field label="Manufacturer" value={form.manufacturer ?? ''} onChange={(v) => set('manufacturer', v)} />
         <Field label="Brand" value={form.brand ?? ''} onChange={(v) => set('brand', v)} />
         <Field label="Model" value={form.model ?? ''} onChange={(v) => set('model', v)} />
+        <Field
+          label="Machine location"
+          value={form.machine_location ?? ''}
+          onChange={(v) => set('machine_location', v)}
+          placeholder="e.g. Lusaka yard"
+        />
         <Field
           label="Year"
           type="number"

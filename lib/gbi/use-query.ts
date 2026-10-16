@@ -12,6 +12,26 @@ export type QueryResult<T> = {
   reload: () => void
 }
 
+function isSessionExpiredError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false
+  const candidate = error as { code?: unknown; status?: unknown; message?: unknown }
+  const code = typeof candidate.code === 'string' ? candidate.code.toLowerCase() : ''
+  const message = typeof candidate.message === 'string' ? candidate.message.toLowerCase() : ''
+  return (
+    candidate.status === 401 ||
+    ['pgrst301', 'pgrst302', 'session_not_found', 'refresh_token_not_found', 'invalid_refresh_token'].includes(code) ||
+    /\b(jwt|access token|refresh token|session)\b.*\b(expired|invalid|not found|missing|unauthorized)\b/.test(message)
+  )
+}
+
+function sessionExpiredMessage(error: unknown): string {
+  if (isSessionExpiredError(error)) {
+    if (typeof window !== 'undefined') window.dispatchEvent(new Event('gbi:session-expired'))
+    return 'Session expired. Redirecting to sign in…'
+  }
+  return friendlyError(error)
+}
+
 /**
  * Runs a Supabase query and tracks loading/ready/error. On any query error
  * (including RLS denial) it exposes an error string and never a fabricated
@@ -37,7 +57,7 @@ export function useQuery<T>(
       ({ data: result, error: queryError }) => {
         if (!active) return
         if (queryError) {
-          setError(friendlyError(queryError))
+          setError(sessionExpiredMessage(queryError))
           setStatus('error')
           return
         }
@@ -46,7 +66,7 @@ export function useQuery<T>(
       },
       (thrown) => {
         if (!active) return
-        setError(friendlyError(thrown))
+        setError(sessionExpiredMessage(thrown))
         setStatus('error')
       },
     )

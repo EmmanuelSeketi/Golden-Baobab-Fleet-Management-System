@@ -357,7 +357,7 @@ nav { flex: 1; }.nav-group { margin-bottom: 21px; }.nav-group > small { display:
 
 /* ---- Modal ---- */
 .modal-overlay { position: fixed; inset: 0; background: rgba(20, 32, 26, .45); backdrop-filter: blur(3px); display: grid; place-items: center; padding: 24px; z-index: 50; }
-.modal-panel { width: min(100%, 640px); max-height: 90vh; background: #fff; border: 1px solid #e2e8e4; border-radius: 14px; box-shadow: 0 30px 80px rgba(20, 40, 28, .25); display: flex; flex-direction: column; overflow: hidden; animation: modal-in .16s ease; }
+.modal-panel { width: min(100%, 900px); max-height: 90vh; background: #fff; border: 1px solid #e2e8e4; border-radius: 14px; box-shadow: 0 30px 80px rgba(20, 40, 28, .25); display: flex; flex-direction: column; overflow: hidden; animation: modal-in .16s ease; }
 @keyframes modal-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 .modal-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; padding: 22px 24px 16px; border-bottom: 1px solid #eef1f2; }
 .modal-header h2 { margin: 5px 0 0; font-size: 20px; letter-spacing: -.4px; color: #202b31; }
@@ -377,8 +377,9 @@ nav { flex: 1; }.nav-group { margin-bottom: 21px; }.nav-group > small { display:
 .modal-section-head h3 { margin: 0; padding: 0; border: 0; }
 .modal-section h3 { display: flex; align-items: center; gap: 8px; font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: #61716a; margin: 0; }
 .modal-section-content { display: flex; flex-direction: column; gap: 8px; }
+.operator-profile-image img { display: block; width: 100%; max-height: 280px; margin-bottom: 14px; border-radius: 9px; object-fit: cover; background: #eef3f0; }
 .operator-profile-summary { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; padding: 13px 15px; border: 1px solid #e5eae7; border-radius: 11px; background: linear-gradient(110deg, #f7faf7, #fff); }
-.operator-profile-summary img, .operator-avatar-placeholder { width: 54px; height: 54px; flex: 0 0 54px; border-radius: 50%; object-fit: cover; }
+.operator-profile-summary img, .operator-avatar-placeholder { width: 180px; height: 120px; flex: 0 0 180px; border-radius: 9px; object-fit: cover; }
 .operator-avatar-placeholder { display: grid; place-items: center; background: #e8efe9; color: #2f6b3d; font-size: 16px; font-weight: 700; }
 .operator-profile-summary div { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
 .operator-profile-summary b { color: #27362f; font-size: 14px; }

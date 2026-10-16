@@ -1,7 +1,7 @@
 'use client'
 
-import { Fragment, useMemo, useRef, useState } from 'react'
-import { CalendarDays, Download, FileSpreadsheet, Layers } from 'lucide-react'
+import { useMemo, useRef, useState } from 'react'
+import { CalendarDays, Download, FileSpreadsheet } from 'lucide-react'
 import { useSupabase } from '@/lib/supabase/use-supabase'
 import { useQuery } from '@/lib/gbi/use-query'
 import { friendlyError, hours as fmtHours, meter, shortDate } from '@/lib/gbi/format'
@@ -87,7 +87,6 @@ export function DailyHoursView({ role, userId }: { role: UserRole; userId: strin
   const [selectedDate, setSelectedDate] = useState<string>(today)
   const [selected, setSelected] = useState<Entry | null>(null)
   const [projectFilter, setProjectFilter] = useState<string>('all')
-  const [grouped, setGrouped] = useState(false)
   const dateInputRef = useRef<HTMLInputElement>(null)
 
   const entries = useQuery<Entry[]>(
@@ -121,23 +120,6 @@ export function DailyHoursView({ role, userId }: { role: UserRole; userId: strin
     [rows, activeFilter],
   )
 
-  const groups = useMemo(() => {
-    const map = new Map<string, Entry[]>()
-    for (const r of visibleRows) {
-      const key = r.project?.name ?? 'Unassigned'
-      const list = map.get(key)
-      if (list) list.push(r)
-      else map.set(key, [r])
-    }
-    return Array.from(map.entries())
-      .map(([name, list]) => ({
-        name,
-        list,
-        totalHours: list.reduce((s, r) => s + Number(r.total_hours ?? 0), 0),
-      }))
-      .sort((a, b) => a.name.localeCompare(b.name))
-  }, [visibleRows])
-
   const totalHours = visibleRows.reduce((s, r) => s + Number(r.total_hours ?? 0), 0)
   const billed = visibleRows.filter((r) => r.is_billed).length
   const isToday = selectedDate === today
@@ -151,7 +133,7 @@ export function DailyHoursView({ role, userId }: { role: UserRole; userId: strin
         </td>
         <td className="mono">{r.machine?.chassis_number ?? 'N/A'}</td>
         <td>{r.operator?.full_name ?? 'N/A'}</td>
-        {!grouped && <td>{r.project?.name ?? 'N/A'}</td>}
+        <td>{r.project?.name ?? 'N/A'}</td>
         <td className="mono num">{meter(r.hour_meter_start)}</td>
         <td className="mono num">{meter(r.hour_meter_end)}</td>
         <td>
@@ -221,14 +203,6 @@ export function DailyHoursView({ role, userId }: { role: UserRole; userId: strin
           </select>
         </label>
 
-        <button
-          className={`today-button group-toggle${grouped ? ' active' : ''}`}
-          onClick={() => setGrouped((g) => !g)}
-          aria-pressed={grouped}
-        >
-          <Layers size={13} />
-          Group by project
-        </button>
       </div>
 
       <div className="hours-summary">
@@ -273,7 +247,7 @@ export function DailyHoursView({ role, userId }: { role: UserRole; userId: strin
                   <th>Machine</th>
                   <th>Chassis No</th>
                   <th>Operator</th>
-                  {!grouped && <th>Project</th>}
+                  <th>Project</th>
                   <th>Meter start</th>
                   <th>Meter end</th>
                   <th>Total</th>
@@ -281,21 +255,7 @@ export function DailyHoursView({ role, userId }: { role: UserRole; userId: strin
                 </tr>
               </thead>
               <tbody>
-                {grouped
-                  ? groups.map((g) => (
-                      <Fragment key={g.name}>
-                        <tr className="group-header-row">
-                          <td colSpan={7}>
-                            <span className="group-name">{g.name}</span>
-                            <span className="group-meta">
-                              {g.list.length} {g.list.length === 1 ? 'machine' : 'machines'} · {fmtHours(g.totalHours)}
-                            </span>
-                          </td>
-                        </tr>
-                        {g.list.map(renderRow)}
-                      </Fragment>
-                    ))
-                  : visibleRows.map(renderRow)}
+                {visibleRows.map(renderRow)}
               </tbody>
             </table>
           </div>

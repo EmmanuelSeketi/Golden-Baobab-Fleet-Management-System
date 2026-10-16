@@ -452,10 +452,13 @@ function OperatorModal({
     >
       {operator && (
         <>
-          <div className="operator-profile-summary">
-            {profilePictureUrl ? (
+          {profilePictureUrl && (
+            <div className="operator-profile-image">
               <img src={profilePictureUrl} alt={`${operator.full_name} profile`} />
-            ) : (
+            </div>
+          )}
+          <div className="operator-profile-summary">
+            {!profilePictureUrl && (
               <span className="operator-avatar-placeholder" aria-hidden="true">
                 {operator.full_name
                   .split(/\s+/)

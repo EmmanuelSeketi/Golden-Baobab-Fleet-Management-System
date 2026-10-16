@@ -14,6 +14,7 @@ type Machine = {
   chassis_number: string | null
   current_hour_meter: number | null
   current_status: string
+  machine_location: string | null
   assigned_operator_id: string | null
   current_project_id: string | null
   operator: { full_name: string } | null
@@ -23,7 +24,7 @@ type Existing = { id: string; machine_id: string; hour_meter_start: number; hour
 type Draft = { start: string; end: string; remarks: string }
 
 const MACHINE_SELECT =
-  'id,machine_number,machine_type,chassis_number,current_hour_meter,current_status,assigned_operator_id,current_project_id,operator:assigned_operator_id(full_name),project:current_project_id(name,site_location,customer_id,customer:customer_id(company_name))'
+  'id,machine_number,machine_type,chassis_number,current_hour_meter,current_status,machine_location,assigned_operator_id,current_project_id,operator:assigned_operator_id(full_name),project:current_project_id(name,site_location,customer_id,customer:customer_id(company_name))'
 
 // Live total from the current draft figures (blank until both are valid and end >= start).
 function draftTotal(draft: Draft): number | null {
@@ -48,6 +49,7 @@ export function DailyHoursEntry({
   const canWrite = role === 'administrator' || role === 'operations_manager'
   const [drafts, setDrafts] = useState<Record<string, Draft>>({})
   const [editing, setEditing] = useState<Record<string, boolean>>({})
+  const [savedRows, setSavedRows] = useState<Record<string, boolean>>({})
   const [saving, setSaving] = useState<string | null>(null)
   const [message, setMessage] = useState<{ text: string; error: boolean } | null>(null)
 
@@ -80,20 +82,20 @@ export function DailyHoursEntry({
         return {
           machine,
           old,
-          draft: drafts[machine.id] ?? {
+          draft: drafts[`${date}:${machine.id}`] ?? {
             start: String(old?.hour_meter_start ?? machine.current_hour_meter ?? ''),
             end: String(old?.hour_meter_end ?? ''),
             remarks: old?.remarks ?? '',
           },
         }
       }),
-    [machines.data, existing.data, drafts],
+    [machines.data, existing.data, drafts, date],
   )
 
   if (!canWrite || date !== new Date().toISOString().slice(0, 10)) return null
 
-  function setDraft(id: string, next: Draft) {
-    setDrafts((current) => ({ ...current, [id]: next }))
+  function setDraft(rowKey: string, next: Draft) {
+    setDrafts((current) => ({ ...current, [rowKey]: next }))
   }
 
   async function save(machine: Machine, draft: Draft, old?: Existing) {
@@ -111,7 +113,7 @@ export function DailyHoursEntry({
       operator_id: machine.assigned_operator_id,
       project_id: machine.current_project_id,
       customer_id: machine.project?.customer_id ?? null,
-      site_location: machine.project?.site_location ?? null,
+      site_location: machine.machine_location ?? machine.project?.site_location ?? null,
       hour_meter_start: start,
       hour_meter_end: end,
       remarks: draft.remarks.trim() || null,
@@ -134,13 +136,9 @@ export function DailyHoursEntry({
     }
     setSaving(null)
     setMessage({ text: `${machine.machine_number} saved.`, error: false })
-    // Lock the row and clear its local draft so it reflects the saved values.
-    setEditing((current) => ({ ...current, [machine.id]: false }))
-    setDrafts((current) => {
-      const next = { ...current }
-      delete next[machine.id]
-      return next
-    })
+    const rowKey = `${date}:${machine.id}`
+    setSavedRows((current) => ({ ...current, [rowKey]: true }))
+    setEditing((current) => ({ ...current, [rowKey]: false }))
     onSaved()
   }
 
@@ -179,7 +177,8 @@ export function DailyHoursEntry({
             )}
             {rows.map(({ machine, old, draft }) => {
               // A saved row is locked until the user explicitly clicks Edit.
-              const locked = !!old && !editing[machine.id]
+              const rowKey = `${date}:${machine.id}`
+              const locked = (!!old || !!savedRows[rowKey]) && !editing[rowKey]
               const total = draftTotal(draft)
               return (
                 <tr key={machine.id}>
@@ -193,7 +192,7 @@ export function DailyHoursEntry({
                     {machine.project?.name ?? 'N/A'}
                     <div className="muted-cell">{machine.project?.customer?.company_name ?? 'No customer'}</div>
                   </td>
-                  <td>{machine.project?.site_location ?? 'N/A'}</td>
+                  <td>{machine.machine_location ?? machine.project?.site_location ?? 'N/A'}</td>
                   <td>
                     <input
                       className="hours-inline-input"
@@ -202,7 +201,7 @@ export function DailyHoursEntry({
                       step="0.01"
                       value={draft.start}
                       disabled={locked}
-                      onChange={(e) => setDraft(machine.id, { ...draft, start: e.target.value })}
+                      onChange={(e) => setDraft(rowKey, { ...draft, start: e.target.value })}
                       aria-label={`${machine.machine_number} meter start`}
                     />
                   </td>
@@ -214,7 +213,7 @@ export function DailyHoursEntry({
                       step="0.01"
                       value={draft.end}
                       disabled={locked}
-                      onChange={(e) => setDraft(machine.id, { ...draft, end: e.target.value })}
+                      onChange={(e) => setDraft(rowKey, { ...draft, end: e.target.value })}
                       aria-label={`${machine.machine_number} meter end`}
                     />
                   </td>
@@ -226,7 +225,7 @@ export function DailyHoursEntry({
                       className="hours-inline-input remarks"
                       value={draft.remarks}
                       disabled={locked}
-                      onChange={(e) => setDraft(machine.id, { ...draft, remarks: e.target.value })}
+                      onChange={(e) => setDraft(rowKey, { ...draft, remarks: e.target.value })}
                       aria-label={`${machine.machine_number} remarks`}
                     />
                   </td>
@@ -234,7 +233,7 @@ export function DailyHoursEntry({
                     {locked ? (
                       <button
                         className="button button-secondary button-small"
-                        onClick={() => setEditing((current) => ({ ...current, [machine.id]: true }))}
+                        onClick={() => setEditing((current) => ({ ...current, [rowKey]: true }))}
                       >
                         <Pencil size={13} />
                         Edit

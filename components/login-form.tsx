@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useSupabase } from '@/lib/supabase/use-supabase'
 
-export function LoginForm() {
+export function LoginForm({ sessionExpired = false }: { sessionExpired?: boolean }) {
   const supabase = useSupabase()
   const router = useRouter()
   const [email, setEmail] = useState('')
@@ -47,8 +47,12 @@ export function LoginForm() {
           src="https://hebbkx1anhila5yf.public.blob.vercel-storage.com/Golden%20Baobab%20Logo.PNG-feY7yBqBZci35dpQ1RqzakSO62Ya8F.png"
           alt="GBI Group logo"
         />
-        <span className="eyebrow">GBI Group · Fleet operations</span>
         <h1>Welcome back</h1>
+        {sessionExpired && (
+          <div className="login-error" role="alert">
+            Session expired. Please sign in again.
+          </div>
+        )}
         <form onSubmit={submit}>
           <label htmlFor="login-email">Email address</label>
           <input

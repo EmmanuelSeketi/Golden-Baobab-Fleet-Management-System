@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   BarChart3,
@@ -125,6 +125,36 @@ function WorkspaceInner({ profile, email }: { profile: AppUser; email: string })
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(() => new Set())
   const { lang, setLang } = useLang()
   const [signingOut, setSigningOut] = useState(false)
+  const signingOutRef = useRef(false)
+  const expiredSessionRedirectRef = useRef(false)
+
+  useEffect(() => {
+    const redirectForExpiredSession = () => {
+      if (signingOutRef.current || expiredSessionRedirectRef.current) return
+      expiredSessionRedirectRef.current = true
+      void (async () => {
+        try {
+          const { error } = await supabase.auth.signOut({ scope: 'local' })
+          if (error) console.error('Could not clear the expired local session:', error.message)
+        } catch (error) {
+          console.error('Could not clear the expired local session:', error)
+        } finally {
+          router.replace('/auth/login?reason=session-expired')
+          router.refresh()
+        }
+      })()
+    }
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'SIGNED_OUT') redirectForExpiredSession()
+    })
+    window.addEventListener('gbi:session-expired', redirectForExpiredSession)
+    return () => {
+      subscription.unsubscribe()
+      window.removeEventListener('gbi:session-expired', redirectForExpiredSession)
+    }
+  }, [router, supabase])
 
   // Filter navigation to what this role may actually read (mirrors RLS).
   const groups = useMemo(
@@ -145,6 +175,7 @@ function WorkspaceInner({ profile, email }: { profile: AppUser; email: string })
   }, [groups, active])
 
   async function signOut() {
+    signingOutRef.current = true
     setSigningOut(true)
     await supabase.auth.signOut()
     // Full navigation so middleware re-evaluates and blocks the workspace by
