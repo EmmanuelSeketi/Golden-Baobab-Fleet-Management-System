@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react'
 import { useSupabase } from '@/lib/supabase/use-supabase'
 import { useQuery } from '@/lib/gbi/use-query'
+import { maintenanceEffectiveStatus } from '@/lib/gbi/maintenance'
 import type { Tone } from '@/lib/gbi/format'
 import {
   hours as fmtHours,
@@ -54,6 +55,7 @@ type MaintRow = {
   mechanic: string | null
   cost: number | null
   next_service_due_date: string | null
+  status_override: boolean
 }
 type RepairRow = {
   id: string
@@ -144,7 +146,7 @@ export function MachineHistoryView() {
         ? Promise.resolve({ data: [], error: null })
         : (supabase
             .from('maintenance_record')
-            .select('id,service_date,service_type,status,mechanic,cost,next_service_due_date')
+            .select('id,service_date,service_type,status,status_override,mechanic,cost,next_service_due_date')
             .eq('machine_id', machineId)
             .order('service_date', { ascending: false }) as unknown as PromiseLike<{
             data: MaintRow[] | null
@@ -199,6 +201,7 @@ export function MachineHistoryView() {
       })
     }
     for (const m of maintenance.data ?? []) {
+      const status = maintenanceEffectiveStatus(m)
       list.push({
         key: `m-${m.id}`,
         type: 'maintenance',
@@ -206,7 +209,7 @@ export function MachineHistoryView() {
         title: m.service_type ?? 'Service',
         detail: m.next_service_due_date ? `Next due ${shortDate(m.next_service_due_date)}` : 'Service record',
         meta: m.mechanic ?? 'No mechanic recorded',
-        status: { label: titleCase(m.status), tone: maintTone(m.status) },
+        status: { label: titleCase(status), tone: maintTone(status) },
         value: m.cost != null ? money(m.cost) : undefined,
       })
     }

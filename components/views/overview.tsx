@@ -9,6 +9,7 @@ import { FileText } from 'lucide-react'
 import { PieChart } from '@mui/x-charts/PieChart'
 import { useSupabase } from '@/lib/supabase/use-supabase'
 import { useQuery } from '@/lib/gbi/use-query'
+import { maintenanceDueDate, maintenanceEffectiveStatus } from '@/lib/gbi/maintenance'
 import { canAccess, firstNameOf, type UserRole } from '@/lib/gbi/roles'
 import {
   hours as fmtHours,
@@ -26,6 +27,7 @@ type HourRow = { entry_date: string; total_hours: number | null }
 type MaintenanceRow = {
   id: string
   status: string
+  status_override: boolean
   next_service_due_date: string | null
   service_date: string
   machine: { machine_number: string; machine_type: string } | null
@@ -115,10 +117,9 @@ export function OverviewView({ role, fullName }: { role: UserRole; fullName: str
     () =>
       supabase
         .from('maintenance_record')
-        .select('id,status,next_service_due_date,service_date,machine:machine_id(machine_number,machine_type)')
-        .in('status', ['upcoming', 'due', 'overdue'])
-        .order('next_service_due_date', { nullsFirst: false })
-        .limit(30) as unknown as PromiseLike<{ data: MaintenanceRow[] | null; error: unknown }>,
+        .select('id,status,status_override,next_service_due_date,service_date,machine:machine_id(machine_number,machine_type)')
+        .order('service_date')
+        .limit(100) as unknown as PromiseLike<{ data: MaintenanceRow[] | null; error: unknown }>,
     [],
   )
   const recent = useQuery<RecentRow[]>(
@@ -171,8 +172,18 @@ export function OverviewView({ role, fullName }: { role: UserRole; fullName: str
     value: site.machineCount,
     color: FLEET_SITE_COLORS[index % FLEET_SITE_COLORS.length],
   }))
-  const dueCount =
-    (maintenance.data ?? []).filter((m) => m.status === 'due' || m.status === 'overdue').length
+  const scheduledMaintenance = (maintenance.data ?? [])
+    .map((record) => ({
+      ...record,
+      effectiveStatus: maintenanceEffectiveStatus(record),
+    }))
+    .filter((record) => record.effectiveStatus !== 'completed')
+    .sort((a, b) =>
+      (maintenanceDueDate(a) ?? '').localeCompare(maintenanceDueDate(b) ?? ''),
+    )
+  const dueCount = scheduledMaintenance.filter(
+    (record) => record.effectiveStatus === 'due' || record.effectiveStatus === 'overdue',
+  ).length
 
   const dailyTotals = useMemo(() => {
     const map = new Map<string, number>()
@@ -572,7 +583,7 @@ export function OverviewView({ role, fullName }: { role: UserRole; fullName: str
                 <MiniState
                   status={maintenance.status}
                   error={maintenance.error}
-                  isEmpty={(maintenance.data ?? []).length === 0}
+                  isEmpty={scheduledMaintenance.length === 0}
                   emptyText="No scheduled maintenance."
                 />
               </div>
@@ -586,16 +597,18 @@ export function OverviewView({ role, fullName }: { role: UserRole; fullName: str
                   </tr>
                 </thead>
                 <tbody>
-                  {(maintenance.data ?? []).slice(0, 4).map((m) => (
+                  {scheduledMaintenance.slice(0, 4).map((m) => (
                     <tr key={m.id}>
                       <td>
                         <b className="mono">{m.machine?.machine_number ?? 'N/A'}</b>
                         <div className="muted-cell">{m.machine?.machine_type ?? ''}</div>
                       </td>
                       <td>
-                        <StatusBadge tone={maintenanceStatusTone(m.status)}>{titleCase(m.status)}</StatusBadge>
+                        <StatusBadge tone={maintenanceStatusTone(m.effectiveStatus)}>
+                          {titleCase(m.effectiveStatus)}
+                        </StatusBadge>
                       </td>
-                      <td>{shortDate(m.next_service_due_date)}</td>
+                      <td>{shortDate(maintenanceDueDate(m))}</td>
                     </tr>
                   ))}
                 </tbody>

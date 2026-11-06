@@ -4,7 +4,8 @@ import { useEffect, useMemo, useState } from 'react'
 import { AlertTriangle, Eye, Image as ImageIcon, MapPin, Pencil, Plus, Trash2 } from 'lucide-react'
 import { useSupabase } from '@/lib/supabase/use-supabase'
 import { useQuery } from '@/lib/gbi/use-query'
-import { machineStatusTone, meter, money, shortDate, titleCase } from '@/lib/gbi/format'
+import { maintenanceEffectiveStatus } from '@/lib/gbi/maintenance'
+import { machineStatusTone, maintenanceStatusTone, meter, money, shortDate, titleCase } from '@/lib/gbi/format'
 import { canManageOps, type UserRole } from '@/lib/gbi/roles'
 import {
   ConfirmDialog,
@@ -378,6 +379,7 @@ type MaintRow = {
   id: string
   service_date: string
   status: string
+  status_override: boolean
   service_type: string | null
   next_service_due_date: string | null
 }
@@ -425,7 +427,7 @@ function MachineModal({
         ? Promise.resolve({ data: [], error: null })
         : (supabase
             .from('maintenance_record')
-            .select('id,service_date,status,service_type,next_service_due_date')
+            .select('id,service_date,status,status_override,service_type,next_service_due_date')
             .eq('machine_id', machine.id)
             .order('service_date', { ascending: false })
             .limit(5) as unknown as PromiseLike<{ data: MaintRow[] | null; error: unknown }>),
@@ -584,7 +586,9 @@ function MachineModal({
                   <b>{m.service_type ?? 'Service'}</b>
                   <span>{shortDate(m.service_date)}</span>
                 </div>
-                <StatusBadge tone={machineStatusTone(machine.current_status)}>{titleCase(m.status)}</StatusBadge>
+                <StatusBadge tone={maintenanceStatusTone(maintenanceEffectiveStatus(m))}>
+                  {titleCase(maintenanceEffectiveStatus(m))}
+                </StatusBadge>
               </div>
             ))}
           </ModalSection>

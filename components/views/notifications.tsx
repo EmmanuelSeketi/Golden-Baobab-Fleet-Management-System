@@ -3,6 +3,7 @@
 import { Bell } from 'lucide-react'
 import { useSupabase } from '@/lib/supabase/use-supabase'
 import { useQuery } from '@/lib/gbi/use-query'
+import { maintenanceDueDate, maintenanceEffectiveStatus } from '@/lib/gbi/maintenance'
 import { canAccess, type UserRole } from '@/lib/gbi/roles'
 import { dateTime, titleCase } from '@/lib/gbi/format'
 import { PageHeading, ViewState } from '@/components/shared'
@@ -19,6 +20,8 @@ type Notification = {
 type MaintenanceAlert = {
   id: string
   status: string
+  status_override: boolean
+  service_date: string
   next_service_due_date: string | null
   service_type: string | null
   machine: { machine_number: string } | null
@@ -71,10 +74,9 @@ export function NotificationsView({ role }: { role: UserRole }) {
       const maintenanceRequest: PromiseLike<QueryRows<MaintenanceAlert>> = operationalRole
         ? (supabase
             .from('maintenance_record')
-            .select('id,status,next_service_due_date,service_type,machine:machine_id(machine_number)')
-            .in('status', ['upcoming', 'due', 'overdue'])
-            .order('next_service_due_date', { ascending: true, nullsFirst: false })
-            .limit(20) as unknown as PromiseLike<QueryRows<MaintenanceAlert>>)
+            .select('id,status,status_override,service_date,next_service_due_date,service_type,machine:machine_id(machine_number)')
+            .order('service_date')
+            .limit(100) as unknown as PromiseLike<QueryRows<MaintenanceAlert>>)
         : Promise.resolve(noMaintenance)
       const repairRequest: PromiseLike<QueryRows<RepairAlert>> = operationalRole
         ? (supabase
@@ -115,14 +117,17 @@ export function NotificationsView({ role }: { role: UserRole }) {
 
       const rows: Notification[] = []
       for (const service of maintenance.data ?? []) {
+        const status = maintenanceEffectiveStatus(service)
+        if (status === 'completed') continue
         const machine = service.machine?.machine_number ?? 'Machine'
+        const dueDate = maintenanceDueDate(service)
         rows.push({
           id: `service-${service.id}`,
-          type: `${titleCase(service.status)} maintenance`,
-          message: `${service.service_type ?? 'Service'} for ${machine}${service.next_service_due_date ? ` is due ${dateTime(service.next_service_due_date).split(' · ')[0]}.` : '.'}`,
+          type: `${titleCase(status)} maintenance`,
+          message: `${service.service_type ?? 'Service'} for ${machine}${dueDate ? ` is due ${dateTime(dueDate).split(' · ')[0]}.` : '.'}`,
           related_entity_type: 'maintenance',
           is_read: false,
-          created_at: service.next_service_due_date ?? new Date().toISOString(),
+          created_at: dueDate ?? new Date().toISOString(),
         })
       }
       for (const repair of repairs.data ?? []) {

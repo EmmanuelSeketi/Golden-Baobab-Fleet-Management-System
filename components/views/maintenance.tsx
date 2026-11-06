@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { AlertTriangle, Eye, Pencil, Plus } from 'lucide-react'
 import { useSupabase } from '@/lib/supabase/use-supabase'
 import { useQuery } from '@/lib/gbi/use-query'
+import { maintenanceEffectiveStatus, maintenanceStatusForDate } from '@/lib/gbi/maintenance'
 import { maintenanceStatusTone, money, shortDate, titleCase } from '@/lib/gbi/format'
 import { canManageOps, type UserRole } from '@/lib/gbi/roles'
 import {
@@ -28,6 +29,7 @@ type Maintenance = {
   parts_replaced: string | null
   cost: number | null
   status: string
+  status_override: boolean
   machine: { machine_number: string; machine_type: string } | null
   machine_id: string
 }
@@ -39,9 +41,9 @@ type MachineLite = {
 }
 
 const STATUSES = ['all', 'upcoming', 'due', 'overdue', 'completed']
-const STATUS_OPTIONS = ['upcoming', 'due', 'overdue', 'completed']
+const STATUS_OPTIONS = ['automatic', 'upcoming', 'due', 'overdue', 'completed']
 const LIST_SELECT =
-  'id,machine_id,service_date,hour_meter_at_service,next_service_due_hours,next_service_due_date,service_type,mechanic,parts_replaced,cost,status,machine:machine_id(machine_number,machine_type)'
+  'id,machine_id,service_date,hour_meter_at_service,next_service_due_hours,next_service_due_date,service_type,mechanic,parts_replaced,cost,status,status_override,machine:machine_id(machine_number,machine_type)'
 
 const today = () => new Date().toISOString().slice(0, 10)
 
@@ -75,14 +77,24 @@ export function MaintenanceView({ role, userId }: { role: UserRole; userId: stri
     [],
   )
 
-  const rows = useMemo(() => {
-    const all = records.data ?? []
-    return filter === 'all' ? all : all.filter((r) => r.status === filter)
-  }, [records.data, filter])
-  const maintenanceRows = records.data ?? []
-  const dueServices = maintenanceRows.filter((record) => record.status === 'due' || record.status === 'overdue').length
-  const upcomingServices = maintenanceRows.filter((record) => record.status === 'upcoming').length
-  const completedServices = maintenanceRows.filter((record) => record.status === 'completed').length
+  const maintenanceRows = useMemo(
+    () =>
+      (records.data ?? []).map((record) => ({
+        ...record,
+        effectiveStatus: maintenanceEffectiveStatus(record),
+      })),
+    [records.data],
+  )
+  const rows = useMemo(
+    () =>
+      filter === 'all'
+        ? maintenanceRows
+        : maintenanceRows.filter((record) => record.effectiveStatus === filter),
+    [maintenanceRows, filter],
+  )
+  const dueServices = maintenanceRows.filter((record) => record.effectiveStatus === 'due' || record.effectiveStatus === 'overdue').length
+  const upcomingServices = maintenanceRows.filter((record) => record.effectiveStatus === 'upcoming').length
+  const completedServices = maintenanceRows.filter((record) => record.effectiveStatus === 'completed').length
 
   return (
     <div className="page-wrap">
@@ -178,7 +190,7 @@ export function MaintenanceView({ role, userId }: { role: UserRole; userId: stri
                     <td>{r.mechanic ?? 'N/A'}</td>
                     <td>{shortDate(r.next_service_due_date)}</td>
                     <td>
-                      <StatusBadge tone={maintenanceStatusTone(r.status)}>{titleCase(r.status)}</StatusBadge>
+                      <StatusBadge tone={maintenanceStatusTone(r.effectiveStatus)}>{titleCase(r.effectiveStatus)}</StatusBadge>
                     </td>
                     <td className="col-actions" onClick={(e) => e.stopPropagation()}>
                       <RowActions
@@ -217,7 +229,9 @@ export function MaintenanceView({ role, userId }: { role: UserRole; userId: stri
         footer={
           selected ? (
             <div className="modal-foot-split">
-              <StatusBadge tone={maintenanceStatusTone(selected.status)}>{titleCase(selected.status)}</StatusBadge>
+              <StatusBadge tone={maintenanceStatusTone(maintenanceEffectiveStatus(selected))}>
+                {titleCase(maintenanceEffectiveStatus(selected))}
+              </StatusBadge>
               {canManage && (
                 <div className="modal-foot-actions">
                   <button
@@ -316,7 +330,7 @@ function MaintenanceFormModal({
         cost: record.cost != null ? String(record.cost) : '',
       })
       setMachineId(record.machine_id ?? '')
-      setStatus(record.status ?? 'upcoming')
+      setStatus(record.status_override ? record.status : 'automatic')
     } else {
       setForm({ service_date: today() })
       setMachineId('')
@@ -350,7 +364,8 @@ function MaintenanceFormModal({
       next_service_due_date: text('next_service_due_date'),
       parts_replaced: text('parts_replaced'),
       cost: num('cost'),
-      status,
+      status: status === 'automatic' ? maintenanceStatusForDate(form.service_date) : status,
+      status_override: status !== 'automatic',
     }
 
     setSaving(true)
@@ -437,7 +452,7 @@ function MaintenanceFormModal({
           <select id="mt-status" value={status} onChange={(e) => setStatus(e.target.value)}>
             {STATUS_OPTIONS.map((s) => (
               <option key={s} value={s}>
-                {titleCase(s)}
+                {s === 'automatic' ? 'Automatic (by service date)' : titleCase(s)}
               </option>
             ))}
           </select>
