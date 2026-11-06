@@ -20,9 +20,11 @@ import {
   Menu,
   FileText,
   Handshake,
+  Moon,
   ScrollText,
   Search,
   Settings,
+  Sun,
   Timer,
   Truck,
   Users,
@@ -130,9 +132,22 @@ function WorkspaceInner({ profile, email }: { profile: AppUser; email: string })
   const [menuOpen, setMenuOpen] = useState(false)
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(() => new Set())
   const { lang, setLang } = useLang()
+  const [darkMode, setDarkMode] = useState(false)
   const [signingOut, setSigningOut] = useState(false)
   const signingOutRef = useRef(false)
   const expiredSessionRedirectRef = useRef(false)
+
+  useEffect(() => {
+    let enabled = false
+    try {
+      enabled = window.localStorage.getItem('gbi-theme') === 'dark'
+    } catch {
+      // Use the default theme when storage is unavailable.
+    }
+    setDarkMode(enabled)
+    document.documentElement.classList.toggle('dark', enabled)
+    document.documentElement.style.colorScheme = enabled ? 'dark' : 'light'
+  }, [])
 
   useEffect(() => {
     const redirectForExpiredSession = () => {
@@ -202,6 +217,18 @@ function WorkspaceInner({ profile, email }: { profile: AppUser; email: string })
       else next.add(group)
       return next
     })
+  }
+
+  function toggleTheme() {
+    const enabled = !darkMode
+    setDarkMode(enabled)
+    document.documentElement.classList.toggle('dark', enabled)
+    document.documentElement.style.colorScheme = enabled ? 'dark' : 'light'
+    try {
+      window.localStorage.setItem('gbi-theme', enabled ? 'dark' : 'light')
+    } catch {
+      // Theme still applies for this session when storage is unavailable.
+    }
   }
 
   const initials = initialsOf(profile.full_name)
@@ -300,6 +327,16 @@ function WorkspaceInner({ profile, email }: { profile: AppUser; email: string })
                 中文
               </button>
             </div>
+            <button
+              className="theme-toggle"
+              type="button"
+              onClick={toggleTheme}
+              aria-label={darkMode ? 'Switch to light mode' : 'Switch to dark mode'}
+              aria-pressed={darkMode}
+              title={darkMode ? 'Switch to light mode' : 'Switch to dark mode'}
+            >
+              {darkMode ? <Sun size={16} /> : <Moon size={16} />}
+            </button>
             <div className="top-search">
               <Search size={15} />
               <input placeholder={lang === 'zh' ? '搜索…' : 'Search fleet, operators…'} />

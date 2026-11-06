@@ -3,6 +3,34 @@
 @import 'shadcn/tailwind.css';
 
 :root { color-scheme: light; --background: #f5f7f8; --foreground: #334155; --text-strong: #0f172a; --text-body: #334155; --text-muted: #64748b; --text-faint: #94a3b8; --card: #ffffff; --card-foreground: #0f172a; --primary: #009943; --primary-foreground: #fff; --muted: #eef1f2; --muted-foreground: #64748b; --border: #dfe5e7; --ring: #009943; --sidebar: #f2eee4; --sidebar-foreground: #26342d; --sidebar-muted: #64748b; --radius: .55rem; }
+.dark { color-scheme: dark; --background: #111918; --foreground: #dce7e1; --text-strong: #f1f5f2; --text-body: #dce7e1; --text-muted: #a4b2aa; --text-faint: #829188; --card: #1b2521; --card-foreground: #edf4ef; --primary: #25b765; --primary-foreground: #07180e; --muted: #26332d; --muted-foreground: #a4b2aa; --border: #34443b; --ring: #25b765; --sidebar: #18221d; --sidebar-foreground: #dce7e1; --sidebar-muted: #a4b2aa; }
+.dark body, .dark .app-shell { background: var(--background); color: var(--foreground); }
+.dark :is(.brand, .topbar, .panel, .kpi-card, .hours-summary, .hours-summary > div, .data-state, .export-bar, .daily-overtime-section, .modal-panel, .modal-section, .modal-footer, .modal-close, .mh-picker, .mh-chip, .date-control, .today-button, .toolbar-search, .fleet-map-popup, .fleet-map-controls button, .fleet-map-layer-toggle, .fleet-map-summary-cards > div, .fleet-map-unlocated, .lifecycle-template-card, .doc-line-card, .gen-summary > div) { background-color: var(--card); color: var(--foreground); border-color: var(--border); }
+.dark :is(.brand strong, .breadcrumb strong, .page-heading h1, .panel-header h2, .kpi-copy strong, .donut-center b, .donut-legend b, .data-table td, .mh-machine-name b, .mh-empty b, .mh-event-top b, .mh-event-value, .modal-header h2, .modal-section h3, .export-bar .export-title b) { color: var(--text-strong); }
+.dark :is(.brand span, .breadcrumb, .breadcrumb b, .page-heading p, .panel-header p, .kpi-copy > span, .kpi-copy small, .donut-center span, .donut-legend li, .data-table td, .mh-empty, .mh-event-detail, .mh-event-meta, .mh-pagination, .modal-header p, .export-bar .export-title span, .form-field label, .lifecycle-event p) { color: var(--text-muted); }
+.dark :is(.top-search, .form-field input, .form-field select, .form-field textarea, .overtime-select-filter, .overtime-date-filter input, .hours-inline-input, .mh-picker select) { background-color: #202c26; color: var(--foreground); border-color: var(--border); }
+.dark :is(.language-switcher, .range-toggle) { background: #202c26; border-color: var(--border); }
+.dark :is(.language-switcher button, .range-pill, .nav-item, .help, .icon-button, .select-button, .chip, .mh-chip, .today-button, .date-control, .modal-close, .fleet-map-controls button, .fleet-map-layer-toggle button) { color: var(--text-muted); }
+.dark .brand { background: #18221d; }
+.dark .nav-item { color: #c4d0c8; }
+.dark .nav-item:hover { background: #29372f; color: #f1f5f2; }
+.dark .nav-item.active { background: #087c3b; color: #fff; }
+.dark .sidebar-bottom { border-color: var(--border); }
+.dark .topbar { border-color: var(--border); }
+.dark .language-switcher button.active { color: #fff; }
+.dark .theme-toggle { color: var(--text-strong); background: #202c26; border-color: var(--border); }
+.dark .data-table th { color: #c5d1ca; background: #202c26; }
+.dark .data-table td, .dark .data-table th, .dark .chart-legend, .dark .mh-event, .dark .modal-header, .dark .modal-footer, .dark .modal-section-head { border-color: var(--border); }
+.dark .chart-area { background-image: linear-gradient(#2c3932 1px, transparent 1px); }
+.dark .chart-gridline { stroke: #34443b; }
+.dark .clickable-row:hover { background: #202c26; }
+.dark .rank-track, .dark .range-pill.active, .dark .mh-chip i, .dark .pill-count { background: #2a3830; color: var(--text-muted); }
+.dark .range-pill.active { color: var(--text-strong); }
+.dark .fleet-map-canvas { background: #202c26; border-color: var(--border); }
+.dark .fleet-map-layer-toggle button + button { border-color: var(--border); }
+.dark .fleet-map-attribution { color: #c5d1ca; background: rgba(27, 37, 33, .9); }
+.dark .theme-toggle:hover { background: #2a3830; }
+.theme-toggle { display: grid; place-items: center; width: 32px; height: 32px; padding: 0; color: #5e6c71; background: #f7f9f9; border: 1px solid var(--border); border-radius: 6px; }
 @theme inline { --font-sans: var(--font-inter); --color-slate-900: #0f172a; --color-slate-700: #334155; --color-slate-500: #64748b; --color-slate-400: #94a3b8; --color-background: var(--background); --color-foreground: var(--foreground); --color-card: var(--card); --color-card-foreground: var(--card-foreground); --color-primary: var(--primary); --color-primary-foreground: var(--primary-foreground); --color-muted: var(--muted); --color-muted-foreground: var(--muted-foreground); --color-border: var(--border); --color-ring: var(--ring); --radius-sm: .35rem; --radius-md: .55rem; --radius-lg: .75rem; }
 * { box-sizing: border-box; }
 html { background: var(--background); }
