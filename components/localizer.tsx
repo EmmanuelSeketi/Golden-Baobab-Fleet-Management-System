@@ -6,6 +6,9 @@ import { ZH } from '@/lib/i18n-dict'
 
 // Tags whose text content must never be translated.
 const SKIP_TAGS = new Set(['SCRIPT', 'STYLE', 'NOSCRIPT', 'CODE', 'PRE'])
+const TRANSLATABLE_ATTRIBUTES = ['placeholder', 'aria-label', 'title'] as const
+const originalText = new WeakMap<Text, string>()
+const originalAttributes = new WeakMap<Element, Map<(typeof TRANSLATABLE_ATTRIBUTES)[number], string>>()
 
 /**
  * App-wide client-side localizer. When the language is Chinese it swaps the
@@ -21,10 +24,6 @@ export function Localizer() {
   useEffect(() => {
     const root = document.body
     if (!root) return
-
-    // Remembers the original English text for each node we translate so we can
-    // restore it when the user switches back to English.
-    const originals = new WeakMap<Text, string>()
 
     function shouldSkip(node: Text): boolean {
       const parent = node.parentElement
@@ -42,21 +41,69 @@ export function Localizer() {
       if (shouldSkip(node)) return
 
       if (lang === 'zh') {
-        const zh = ZH[trimmed]
-        if (zh && zh !== trimmed) {
-          if (!originals.has(node)) originals.set(node, raw)
-          const next = raw.replace(trimmed, zh)
+        const saved = originalText.get(node)
+        const savedTranslation = saved ? ZH[saved.trim()] : undefined
+        if (saved == null || (raw !== saved && trimmed !== savedTranslation)) {
+          originalText.set(node, raw)
+        }
+        const source = originalText.get(node) ?? raw
+        const sourceTrimmed = source.trim()
+        const zh = ZH[sourceTrimmed]
+        if (zh && zh !== sourceTrimmed) {
+          const next = source.replace(sourceTrimmed, zh)
           if (node.nodeValue !== next) node.nodeValue = next
         }
       } else {
-        const orig = originals.get(node)
-        if (orig != null && node.nodeValue !== orig) {
-          node.nodeValue = orig
+        const orig = originalText.get(node)
+        if (orig != null && raw !== orig) {
+          if (trimmed === ZH[orig.trim()]) node.nodeValue = orig
+          else originalText.set(node, raw)
+        }
+      }
+    }
+
+    function shouldSkipElement(element: Element): boolean {
+      return SKIP_TAGS.has(element.tagName) || element.closest('[data-no-translate]') !== null
+    }
+
+    function translateAttribute(element: Element, attribute: (typeof TRANSLATABLE_ATTRIBUTES)[number]) {
+      if (shouldSkipElement(element)) return
+      const raw = element.getAttribute(attribute)
+      if (raw == null || !raw.trim()) return
+
+      let originals = originalAttributes.get(element)
+      if (!originals) {
+        originals = new Map()
+        originalAttributes.set(element, originals)
+      }
+
+      if (lang === 'zh') {
+        const saved = originals.get(attribute)
+        const savedTranslation = saved ? ZH[saved.trim()] : undefined
+        if (saved == null || (raw !== saved && raw.trim() !== savedTranslation)) {
+          originals.set(attribute, raw)
+        }
+        const source = originals.get(attribute) ?? raw
+        const sourceTrimmed = source.trim()
+        const zh = ZH[sourceTrimmed]
+        if (zh && zh !== sourceTrimmed) element.setAttribute(attribute, source.replace(sourceTrimmed, zh))
+      } else {
+        const original = originals.get(attribute)
+        if (original != null && raw !== original) {
+          if (raw.trim() === ZH[original.trim()]) element.setAttribute(attribute, original)
+          else originals.set(attribute, raw)
         }
       }
     }
 
     function walk(el: Node) {
+      if (el.nodeType === Node.ELEMENT_NODE) {
+        const element = el as Element
+        TRANSLATABLE_ATTRIBUTES.forEach((attribute) => translateAttribute(element, attribute))
+        element.querySelectorAll('*').forEach((child) => {
+          TRANSLATABLE_ATTRIBUTES.forEach((attribute) => translateAttribute(child, attribute))
+        })
+      }
       const tw = document.createTreeWalker(el, NodeFilter.SHOW_TEXT)
       const nodes: Text[] = []
       let n = tw.nextNode()
@@ -73,18 +120,23 @@ export function Localizer() {
       for (const m of mutations) {
         if (m.type === 'characterData' && m.target.nodeType === Node.TEXT_NODE) {
           translateNode(m.target as Text)
+        } else if (m.type === 'attributes' && m.target.nodeType === Node.ELEMENT_NODE) {
+          const attribute = m.attributeName
+          if (TRANSLATABLE_ATTRIBUTES.includes(attribute as (typeof TRANSLATABLE_ATTRIBUTES)[number])) {
+            translateAttribute(m.target as Element, attribute as (typeof TRANSLATABLE_ATTRIBUTES)[number])
+          }
         }
         m.addedNodes.forEach((an) => {
           if (an.nodeType === Node.TEXT_NODE) translateNode(an as Text)
           else if (an.nodeType === Node.ELEMENT_NODE) walk(an)
         })
       }
-      observer.observe(root, { childList: true, subtree: true, characterData: true })
+      observer.observe(root, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: [...TRANSLATABLE_ATTRIBUTES] })
     })
 
     observer.disconnect()
     walk(root)
-    observer.observe(root, { childList: true, subtree: true, characterData: true })
+    observer.observe(root, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: [...TRANSLATABLE_ATTRIBUTES] })
 
     return () => observer.disconnect()
   }, [lang])

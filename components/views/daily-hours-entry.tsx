@@ -9,6 +9,7 @@ import type { UserRole } from '@/lib/gbi/roles'
 
 type Machine = {
   id: string
+  name: string
   machine_number: string
   machine_type: string
   chassis_number: string | null
@@ -24,7 +25,7 @@ type Existing = { id: string; machine_id: string; hour_meter_start: number; hour
 type Draft = { start: string; end: string; remarks: string }
 
 const MACHINE_SELECT =
-  'id,machine_number,machine_type,chassis_number,current_hour_meter,current_status,machine_location,assigned_operator_id,current_project_id,operator:assigned_operator_id(full_name),project:current_project_id(name,site_location,customer_id,customer:customer_id(company_name))'
+  'id,name,machine_number,machine_type,chassis_number,current_hour_meter,current_status,machine_location,assigned_operator_id,current_project_id,operator:assigned_operator_id(full_name),project:current_project_id(name,site_location,customer_id,customer:customer_id(company_name))'
 
 // Live total from the current draft figures (blank until both are valid and end >= start).
 function draftTotal(draft: Draft): number | null {
@@ -38,11 +39,13 @@ export function DailyHoursEntry({
   role,
   userId,
   date,
+  isToday,
   onSaved,
 }: {
   role: UserRole
   userId: string
   date: string
+  isToday: boolean
   onSaved: () => void
 }) {
   const supabase = useSupabase()
@@ -92,7 +95,22 @@ export function DailyHoursEntry({
     [machines.data, existing.data, drafts, date],
   )
 
-  if (!canWrite || date !== new Date().toISOString().slice(0, 10)) return null
+  if (!canWrite) {
+    return (
+      <div className="panel machine-entry-notice" role="status">
+        <b>Daily hour entry is unavailable for this role.</b>
+        <span>Only administrators and operations managers can enter machine readings.</span>
+      </div>
+    )
+  }
+  if (!isToday) {
+    return (
+      <div className="panel machine-entry-notice" role="status">
+        <b>Machine readings can only be entered for today.</b>
+        <span>Select today to enter or update machine readings.</span>
+      </div>
+    )
+  }
 
   function setDraft(rowKey: string, next: Draft) {
     setDrafts((current) => ({ ...current, [rowKey]: next }))
@@ -168,10 +186,28 @@ export function DailyHoursEntry({
             </tr>
           </thead>
           <tbody>
+            {machines.status === 'loading' && (
+              <tr>
+                <td colSpan={10}>Loading eligible machines…</td>
+              </tr>
+            )}
+            {machines.status === 'error' && (
+              <tr>
+                <td colSpan={10}>
+                  <div className="machine-entry-message error">
+                    <span>Could not load eligible machines: {machines.error}</span>
+                    <button className="button button-secondary button-small" onClick={machines.reload}>Retry</button>
+                  </div>
+                </td>
+              </tr>
+            )}
             {machines.status === 'ready' && rows.length === 0 && (
               <tr>
                 <td colSpan={10}>
-                  No machines are currently marked On hire.
+                  <div className="machine-entry-message">
+                    <b>No machines are marked On hire.</b>
+                    <span>Set a machine to On hire in Fleet Register before entering its meter readings.</span>
+                  </div>
                 </td>
               </tr>
             )}
@@ -183,8 +219,7 @@ export function DailyHoursEntry({
               return (
                 <tr key={machine.id}>
                   <td>
-                    <b className="mono">{machine.machine_number}</b>
-                    <div className="muted-cell">{machine.machine_type}</div>
+                    <b>{machine.name}</b>
                   </td>
                   <td className="mono">{machine.chassis_number ?? 'N/A'}</td>
                   <td>{machine.operator?.full_name ?? 'N/A'}</td>

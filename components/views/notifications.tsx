@@ -24,14 +24,14 @@ type MaintenanceAlert = {
   service_date: string
   next_service_due_date: string | null
   service_type: string | null
-  machine: { machine_number: string } | null
+  machine: { name: string; machine_number: string } | null
 }
 
 type RepairAlert = {
   id: string
   fault_date: string
   fault_description: string
-  machine: { machine_number: string } | null
+  machine: { name: string; machine_number: string } | null
 }
 
 type InvoiceAlert = { id: string; invoice_number: string; status: string }
@@ -74,14 +74,14 @@ export function NotificationsView({ role }: { role: UserRole }) {
       const maintenanceRequest: PromiseLike<QueryRows<MaintenanceAlert>> = operationalRole
         ? (supabase
             .from('maintenance_record')
-            .select('id,status,status_override,service_date,next_service_due_date,service_type,machine:machine_id(machine_number)')
+            .select('id,status,status_override,service_date,next_service_due_date,service_type,machine:machine_id(name,machine_number)')
             .order('service_date')
             .limit(100) as unknown as PromiseLike<QueryRows<MaintenanceAlert>>)
         : Promise.resolve(noMaintenance)
       const repairRequest: PromiseLike<QueryRows<RepairAlert>> = operationalRole
         ? (supabase
             .from('repair_record')
-            .select('id,fault_date,fault_description,machine:machine_id(machine_number)')
+            .select('id,fault_date,fault_description,machine:machine_id(name,machine_number)')
             .eq('repair_completed', false)
             .order('fault_date', { ascending: false })
             .limit(20) as unknown as PromiseLike<QueryRows<RepairAlert>>)
@@ -119,7 +119,7 @@ export function NotificationsView({ role }: { role: UserRole }) {
       for (const service of maintenance.data ?? []) {
         const status = maintenanceEffectiveStatus(service)
         if (status === 'completed') continue
-        const machine = service.machine?.machine_number ?? 'Machine'
+        const machine = service.machine ? `${service.machine.name} (${service.machine.machine_number})` : 'Machine'
         const dueDate = maintenanceDueDate(service)
         rows.push({
           id: `service-${service.id}`,
@@ -134,7 +134,7 @@ export function NotificationsView({ role }: { role: UserRole }) {
         rows.push({
           id: `repair-${repair.id}`,
           type: 'Open repair',
-          message: `${repair.machine?.machine_number ?? 'Machine'}: ${repair.fault_description}`,
+          message: `${repair.machine ? `${repair.machine.name} (${repair.machine.machine_number})` : 'Machine'}: ${repair.fault_description}`,
           related_entity_type: 'repair',
           is_read: false,
           created_at: repair.fault_date,

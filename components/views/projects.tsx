@@ -332,7 +332,7 @@ type RecentEntry = {
   id: string
   entry_date: string
   total_hours: number | null
-  machine: { machine_number: string } | null
+  machine: { name: string; machine_number: string } | null
 }
 
 type ProjectContract = {
@@ -344,6 +344,7 @@ type ProjectContract = {
 
 type ProjectMachine = {
   id: string
+  name: string
   machine_number: string
   machine_type: string
   assigned_operator_id: string | null
@@ -376,7 +377,7 @@ function ProjectDetailModal({
         ? Promise.resolve({ data: [], error: null })
         : (supabase
             .from('daily_hour_entry')
-            .select('id,entry_date,total_hours,machine:machine_id(machine_number)')
+            .select('id,entry_date,total_hours,machine:machine_id(name,machine_number)')
             .eq('project_id', project.id)
             .order('entry_date', { ascending: false })
             .limit(8) as unknown as PromiseLike<{ data: RecentEntry[] | null; error: unknown }>),
@@ -402,7 +403,7 @@ function ProjectDetailModal({
         ? Promise.resolve({ data: [], error: null })
         : (supabase
             .from('machine')
-            .select('id,machine_number,machine_type,assigned_operator_id,current_project_id')
+            .select('id,name,machine_number,machine_type,assigned_operator_id,current_project_id')
             .is('deleted_at', null)
             .order('machine_number') as unknown as PromiseLike<{ data: ProjectMachine[] | null; error: unknown }>),
     [project?.id, canAssignMachines],
@@ -476,8 +477,8 @@ function ProjectDetailModal({
               {projectMachines.map((machine) => (
                 <div className="stack-row" key={machine.id}>
                   <div>
-                    <b className="mono">{machine.machine_number}</b>
-                    <span>{machine.machine_type}</span>
+                    <b>{machine.name}</b>
+                    <span><span className="mono">{machine.machine_number}</span> · {machine.machine_type}</span>
                   </div>
                 </div>
               ))}
@@ -491,7 +492,7 @@ function ProjectDetailModal({
                   <option value="">Select a machine…</option>
                   {(machines.data ?? []).map((machine) => (
                     <option key={machine.id} value={machine.id}>
-                      {machine.machine_number} · {machine.machine_type}
+                      {machine.name} · {machine.machine_number} · {machine.machine_type}
                       {machine.current_project_id && machine.current_project_id !== project.id
                         ? ' · assigned to another project'
                         : ''}
@@ -520,7 +521,8 @@ function ProjectDetailModal({
             {(recent.data ?? []).map((r) => (
               <div className="stack-row" key={r.id}>
                 <div>
-                  <b className="mono">{r.machine?.machine_number ?? 'N/A'}</b>
+                  <b>{r.machine?.name ?? 'N/A'}</b>
+                  <span className="mono">{r.machine?.machine_number ?? ''}</span>
                   <span>{shortDate(r.entry_date)}</span>
                 </div>
                 <div className="stack-meta">{fmtHours(r.total_hours)}</div>

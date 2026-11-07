@@ -26,6 +26,7 @@ type ProjectOption = {
 
 type MachineOption = {
   id: string
+  name: string
   machine_number: string
   machine_type: string
   model: string | null
@@ -129,7 +130,7 @@ export function EquipmentLifecycleView({ role, userId }: { role: UserRole; userI
         ? Promise.resolve({ data: [], error: null })
         : (supabase
             .from('machine')
-            .select('id,machine_number,machine_type,model,current_hour_meter')
+            .select('id,name,machine_number,machine_type,model,current_hour_meter')
             .eq('current_project_id', form.projectId)
             .is('deleted_at', null)
             .order('machine_number') as unknown as PromiseLike<{
@@ -162,7 +163,7 @@ export function EquipmentLifecycleView({ role, userId }: { role: UserRole; userI
     : (machines.data ?? []).map((machine) => ({
         machineId: machine.id,
         machineNumber: machine.machine_number,
-        equipment: machine.machine_type,
+        equipment: `${machine.name} · ${machine.machine_type}`,
         model: machine.model ?? '',
         currentReading: '',
         actualUsed: '',

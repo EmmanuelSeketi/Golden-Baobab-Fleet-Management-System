@@ -6,6 +6,7 @@ import { Modal, ModalSection } from '@/components/shared'
 import { useSupabase } from '@/lib/supabase/use-supabase'
 import { useQuery } from '@/lib/gbi/use-query'
 import { downloadQuotationDoc, type QuotationDocData, type QuotationLineItem } from '@/lib/gbi/quotation-doc'
+import type { LogoChoice } from '@/lib/gbi/contract-doc'
 
 type Customer = {
   id: string
@@ -29,6 +30,7 @@ type ProjectContract = {
 }
 type Machine = {
   id: string
+  name: string
   machine_number: string
   machine_type: string
   manufacturer: string | null
@@ -61,6 +63,7 @@ export function QuotationDocModal({
   const [contractId, setContractId] = useState('')
   const [address, setAddress] = useState('ZAMBIA')
   const [currency, setCurrency] = useState('ZMW')
+  const [logo, setLogo] = useState<LogoChoice>('gbi')
   const [mobilizationFee, setMobilizationFee] = useState('10000')
   const [items, setItems] = useState<ItemDraft[]>([emptyItem()])
   const [saving, setSaving] = useState(false)
@@ -112,7 +115,7 @@ export function QuotationDocModal({
         ? Promise.resolve({ data: [], error: null })
         : (supabase
             .from('machine')
-            .select('id,machine_number,machine_type,manufacturer,brand,model,chassis_number')
+            .select('id,name,machine_number,machine_type,manufacturer,brand,model,chassis_number')
             .eq('current_project_id', projectId)
             .is('deleted_at', null)
             .order('machine_number') as unknown as PromiseLike<{
@@ -154,6 +157,7 @@ export function QuotationDocModal({
       setContractId('')
       setAddress('ZAMBIA')
       setCurrency('ZMW')
+      setLogo('gbi')
       setMobilizationFee('10000')
       setItems([emptyItem()])
       setError('')
@@ -195,7 +199,7 @@ export function QuotationDocModal({
 
   function machineLabels(machine: Machine) {
     const model = machine.model || [machine.brand, machine.manufacturer].filter(Boolean).join(' ') || machine.machine_type
-    const specification = [machine.machine_type, machine.machine_number].filter(Boolean).join(' · ')
+    const specification = [machine.name, machine.machine_type, machine.machine_number].filter(Boolean).join(' · ')
     return { model, specification }
   }
 
@@ -207,7 +211,7 @@ export function QuotationDocModal({
       date: quotationDate,
       currency,
       mobilizationFee,
-      logo: 'gbi',
+      logo,
       items: items.map((item) => {
         const machine = (machines.data ?? []).find((row) => row.id === item.machineId)
         const labels = machine ? machineLabels(machine) : { model: '', specification: '' }
@@ -229,7 +233,7 @@ export function QuotationDocModal({
       onClose()
       return true
     } catch {
-      setError('The invoice was saved, but its document could not be generated. Use Download invoice to try again.')
+      setError('The quotation was saved, but its document could not be generated. Use Download quotation to try again.')
       return false
     }
   }
@@ -312,8 +316,8 @@ export function QuotationDocModal({
       open={open}
       onClose={saving ? () => {} : onClose}
       eyebrow="Commercial"
-      title={savedQuotation ? 'Invoice saved' : 'New invoice'}
-      subtitle="The document shows the lessee and invoiced machines. Project and contract are retained in the app history."
+      title={savedQuotation ? 'Quotation saved' : 'New quotation'}
+      subtitle="The document shows the lessee and quoted machines. Project and contract are retained in the app history."
       footer={
         <div className="modal-foot-actions" style={{ marginLeft: 'auto' }}>
           <button className="button button-secondary" onClick={onClose} disabled={saving}>
@@ -321,7 +325,7 @@ export function QuotationDocModal({
           </button>
           <button className="button button-primary" onClick={submit} disabled={saving || customers.status !== 'ready'}>
             <Download size={14} />
-            {saving ? 'Saving…' : savedQuotation ? 'Download invoice' : 'Save & download'}
+            {saving ? 'Saving…' : savedQuotation ? 'Download quotation' : 'Save & download'}
           </button>
         </div>
       }
@@ -333,7 +337,7 @@ export function QuotationDocModal({
         </div>
       )}
       {savedQuotation ? (
-        <p className="form-success">Invoice {quotationNumber} has been saved to history.</p>
+        <p className="form-success">Quotation {quotationNumber} has been saved to history.</p>
       ) : (
         <>
           <div className="form-grid">
@@ -423,6 +427,14 @@ export function QuotationDocModal({
               <input value={address} onChange={(e) => setAddress(e.target.value)} />
             </label>
             <label className="field">
+              <span>Header logo</span>
+              <select value={logo} onChange={(event) => setLogo(event.target.value as LogoChoice)} disabled={saving}>
+                <option value="gbi">GBI Group</option>
+                <option value="sdlg">SDLG</option>
+                <option value="none">No logo</option>
+              </select>
+            </label>
+            <label className="field">
               <span>Currency</span>
               <input value={currency} readOnly />
             </label>
@@ -490,7 +502,7 @@ export function QuotationDocModal({
                         {(machines.data ?? [])
                           .filter((row) => row.id === item.machineId || !selectedMachineIds.includes(row.id))
                           .map((row) => (
-                            <option key={row.id} value={row.id}>{row.machine_number} · {row.machine_type}</option>
+                            <option key={row.id} value={row.id}>{row.name} · {row.machine_number} · {row.machine_type}</option>
                           ))}
                       </select>
                     </label>

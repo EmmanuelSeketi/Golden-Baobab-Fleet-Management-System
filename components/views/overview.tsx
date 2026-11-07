@@ -30,13 +30,13 @@ type MaintenanceRow = {
   status_override: boolean
   next_service_due_date: string | null
   service_date: string
-  machine: { machine_number: string; machine_type: string } | null
+  machine: { name: string; machine_number: string; machine_type: string } | null
 }
 type RecentRow = {
   id: string
   entry_date: string
   total_hours: number | null
-  machine: { machine_number: string } | null
+  machine: { name: string; machine_number: string } | null
   operator: { full_name: string } | null
 }
 
@@ -84,7 +84,7 @@ export function OverviewView({ role, fullName }: { role: UserRole; fullName: str
     () =>
       supabase
         .from('machine')
-        .select('machine_number,current_status,project:current_project_id(name,site_location)')
+        .select('name,machine_number,current_status,project:current_project_id(name,site_location)')
         .is('deleted_at', null)
         .then(({ data, error }) => ({
           data: data?.map((machine) => ({
@@ -117,7 +117,7 @@ export function OverviewView({ role, fullName }: { role: UserRole; fullName: str
     () =>
       supabase
         .from('maintenance_record')
-        .select('id,status,status_override,next_service_due_date,service_date,machine:machine_id(machine_number,machine_type)')
+        .select('id,status,status_override,next_service_due_date,service_date,machine:machine_id(name,machine_number,machine_type)')
         .order('service_date')
         .limit(100) as unknown as PromiseLike<{ data: MaintenanceRow[] | null; error: unknown }>,
     [],
@@ -126,7 +126,7 @@ export function OverviewView({ role, fullName }: { role: UserRole; fullName: str
     () =>
       supabase
         .from('daily_hour_entry')
-        .select('id,entry_date,total_hours,machine:machine_id(machine_number),operator:operator_id(full_name)')
+        .select('id,entry_date,total_hours,machine:machine_id(name,machine_number),operator:operator_id(full_name)')
         .order('entry_date', { ascending: false })
         .order('created_at', { ascending: false })
         .limit(6) as unknown as PromiseLike<{ data: RecentRow[] | null; error: unknown }>,
@@ -545,7 +545,7 @@ export function OverviewView({ role, fullName }: { role: UserRole; fullName: str
                 />
               </div>
             ) : (
-              <table className="data-table compact">
+              <table className="data-table compact overview-ruled-table">
                 <thead>
                   <tr>
                     <th>Date</th>
@@ -559,7 +559,8 @@ export function OverviewView({ role, fullName }: { role: UserRole; fullName: str
                     <tr key={r.id}>
                       <td>{shortDate(r.entry_date)}</td>
                       <td>
-                        <b className="mono">{r.machine?.machine_number ?? 'N/A'}</b>
+                        <b>{r.machine?.name ?? 'N/A'}</b>
+                        <div className="muted-cell mono">{r.machine?.machine_number ?? ''}</div>
                       </td>
                       <td>{r.operator?.full_name ?? 'N/A'}</td>
                       <td>{fmtHours(r.total_hours)}</td>
@@ -588,7 +589,7 @@ export function OverviewView({ role, fullName }: { role: UserRole; fullName: str
                 />
               </div>
             ) : (
-              <table className="data-table compact">
+              <table className="data-table compact overview-ruled-table">
                 <thead>
                   <tr>
                     <th>Machine</th>
@@ -600,7 +601,8 @@ export function OverviewView({ role, fullName }: { role: UserRole; fullName: str
                   {scheduledMaintenance.slice(0, 4).map((m) => (
                     <tr key={m.id}>
                       <td>
-                        <b className="mono">{m.machine?.machine_number ?? 'N/A'}</b>
+                        <b>{m.machine?.name ?? 'N/A'}</b>
+                        <div className="muted-cell mono">{m.machine?.machine_number ?? ''}</div>
                         <div className="muted-cell">{m.machine?.machine_type ?? ''}</div>
                       </td>
                       <td>

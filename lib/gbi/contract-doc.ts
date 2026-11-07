@@ -22,6 +22,8 @@ export type ContractLineItem = {
 }
 
 export type LogoChoice = 'gbi' | 'sdlg' | 'none'
+export const GBI_LOGO_URL = '/logo-gbi.png'
+export const SDLG_LOGO_URL = '/SDLG%20LOGO.png'
 
 export type ContractDocData = {
   contractNumber: string
@@ -32,13 +34,13 @@ export type ContractDocData = {
   logo?: LogoChoice
 }
 
-type LoadedLogo = { data: ArrayBuffer; width: number; height: number }
+type LoadedLogo = { data: ArrayBuffer; width: number; height: number; type: 'png' | 'jpg' }
 
 // Source files live in /public. Dimensions (in points) preserve each logo's
 // aspect ratio: GBI is portrait (~2:3), SDLG is square.
-const LOGO_FILES: Record<Exclude<LogoChoice, 'none'>, { src: string; width: number; height: number }> = {
-  gbi: { src: '/logo-gbi.jpeg', width: 72, height: 108 },
-  sdlg: { src: '/logo-sdlg.jpeg', width: 96, height: 96 },
+const LOGO_FILES: Record<Exclude<LogoChoice, 'none'>, { src: string; width: number; height: number; type: 'png' | 'jpg' }> = {
+  gbi: { src: GBI_LOGO_URL, width: 72, height: 104, type: 'png' },
+  sdlg: { src: SDLG_LOGO_URL, width: 96, height: 98, type: 'png' },
 }
 
 const VAT_RATE = 0.16
@@ -260,7 +262,7 @@ export function buildContractDoc(data: ContractDocData, logo?: LoadedLogo): Docu
         children: [
           new ImageRun({
             data: logo.data,
-            type: 'jpg',
+            type: logo.type,
             transformation: { width: logo.width, height: logo.height },
           }),
         ],
@@ -341,7 +343,7 @@ async function loadLogo(choice: LogoChoice): Promise<LoadedLogo | undefined> {
     const res = await fetch(meta.src)
     if (!res.ok) return undefined
     const data = await res.arrayBuffer()
-    return { data, width: meta.width, height: meta.height }
+    return { data, width: meta.width, height: meta.height, type: meta.type }
   } catch {
     return undefined
   }

@@ -26,19 +26,20 @@ type Repair = {
   parts_used: string | null
   cost: number | null
   downtime_hours: number | null
-  machine: { machine_number: string; machine_type: string } | null
+  machine: { name: string; machine_number: string; machine_type: string } | null
   machine_id: string
 }
 
 type MachineLite = {
   id: string
+  name: string
   machine_number: string
   machine_type: string
 }
 
 const FILTERS = ['all', 'open', 'completed'] as const
 const LIST_SELECT =
-  'id,machine_id,fault_date,fault_description,mechanic,repair_completed,parts_used,cost,downtime_hours,machine:machine_id(machine_number,machine_type)'
+  'id,machine_id,fault_date,fault_description,mechanic,repair_completed,parts_used,cost,downtime_hours,machine:machine_id(name,machine_number,machine_type)'
 
 const today = () => new Date().toISOString().slice(0, 10)
 
@@ -66,7 +67,7 @@ export function RepairsView({ role, userId }: { role: UserRole; userId: string }
     () =>
       supabase
         .from('machine')
-        .select('id,machine_number,machine_type')
+        .select('id,name,machine_number,machine_type')
         .is('deleted_at', null)
         .order('machine_number') as unknown as PromiseLike<{ data: MachineLite[] | null; error: unknown }>,
     [],
@@ -157,8 +158,8 @@ export function RepairsView({ role, userId }: { role: UserRole; userId: string }
                 {rows.map((r) => (
                   <tr key={r.id} className="clickable-row" onClick={() => setSelected(r)}>
                     <td>
-                      <b className="mono">{r.machine?.machine_number ?? 'N/A'}</b>
-                      <div className="muted-cell">{r.machine?.machine_type ?? ''}</div>
+                      <b>{r.machine?.name ?? 'N/A'}</b>
+                      <div className="muted-cell"><span className="mono">{r.machine?.machine_number ?? ''}</span> · {r.machine?.machine_type ?? ''}</div>
                     </td>
                     <td>{shortDate(r.fault_date)}</td>
                     <td className="truncate-cell">{r.fault_description}</td>
@@ -201,8 +202,8 @@ export function RepairsView({ role, userId }: { role: UserRole; userId: string }
         open={!!selected}
         onClose={() => setSelected(null)}
         eyebrow="Repair record"
-        title={selected?.machine?.machine_number ?? ''}
-        subtitle={selected ? shortDate(selected.fault_date) : ''}
+        title={selected?.machine?.name ?? ''}
+        subtitle={selected ? `${selected.machine?.machine_number ?? ''} · ${shortDate(selected.fault_date)}` : ''}
         footer={
           selected ? (
             <div className="modal-foot-split">
@@ -230,7 +231,8 @@ export function RepairsView({ role, userId }: { role: UserRole; userId: string }
         {selected && (
           <DetailGrid
             items={[
-              ['Machine', selected.machine?.machine_number ?? 'N/A'],
+              ['Machine name', selected.machine?.name ?? 'N/A'],
+              ['Machine number', selected.machine?.machine_number ?? 'N/A'],
               ['Machine type', selected.machine?.machine_type ?? 'N/A'],
               ['Fault date', shortDate(selected.fault_date)],
               ['Mechanic', selected.mechanic ?? 'N/A'],
@@ -395,7 +397,7 @@ function RepairFormModal({
             <option value="">Select machine</option>
             {machines.map((m) => (
               <option key={m.id} value={m.id}>
-                {m.machine_number} · {m.machine_type}
+                {m.name} · {m.machine_number} · {m.machine_type}
               </option>
             ))}
           </select>

@@ -43,19 +43,19 @@ type ServiceRow = {
   service_date: string
   status: string
   service_type: string | null
-  machine: { machine_number: string } | null
+  machine: { name: string; machine_number: string } | null
 }
 type RepairRow = {
   id: string
   fault_date: string
   fault_description: string
   repair_completed: boolean
-  machine: { machine_number: string } | null
+  machine: { name: string; machine_number: string } | null
 }
 type AssignmentRow = {
   id: string
   start_date: string
-  machine: { machine_number: string } | null
+  machine: { name: string; machine_number: string } | null
   project: { name: string } | null
 }
 
@@ -91,7 +91,7 @@ export function CalendarView() {
     () =>
       supabase
         .from('maintenance_record')
-        .select('id,next_service_due_date,service_date,status,service_type,machine:machine_id(machine_number)')
+        .select('id,next_service_due_date,service_date,status,service_type,machine:machine_id(name,machine_number)')
         .not('next_service_due_date', 'is', null)
         .gte('next_service_due_date', startIso)
         .lte('next_service_due_date', endIso) as unknown as PromiseLike<{
@@ -104,7 +104,7 @@ export function CalendarView() {
     () =>
       supabase
         .from('repair_record')
-        .select('id,fault_date,fault_description,repair_completed,machine:machine_id(machine_number)')
+        .select('id,fault_date,fault_description,repair_completed,machine:machine_id(name,machine_number)')
         .gte('fault_date', startIso)
         .lte('fault_date', endIso) as unknown as PromiseLike<{ data: RepairRow[] | null; error: unknown }>,
     [startIso, endIso],
@@ -113,7 +113,7 @@ export function CalendarView() {
     () =>
       supabase
         .from('machine_assignment')
-        .select('id,start_date,machine:machine_id(machine_number),project:project_id(name)')
+        .select('id,start_date,machine:machine_id(name,machine_number),project:project_id(name)')
         .gte('start_date', startIso)
         .lte('start_date', endIso) as unknown as PromiseLike<{
         data: AssignmentRow[] | null
@@ -139,7 +139,7 @@ export function CalendarView() {
           key: `s-${s.id}`,
           type: 'service',
           date: s.next_service_due_date,
-          machine: s.machine?.machine_number ?? 'N/A',
+          machine: s.machine ? `${s.machine.name} · ${s.machine.machine_number}` : 'N/A',
           title: s.service_type ? `${s.service_type} due` : 'Service due',
           tone: 'amber',
         })
@@ -151,7 +151,7 @@ export function CalendarView() {
           key: `r-${r.id}`,
           type: 'repair',
           date: r.fault_date,
-          machine: r.machine?.machine_number ?? 'N/A',
+          machine: r.machine ? `${r.machine.name} · ${r.machine.machine_number}` : 'N/A',
           title: r.fault_description,
           tone: r.repair_completed ? 'green' : 'red',
         })
@@ -163,7 +163,7 @@ export function CalendarView() {
           key: `a-${a.id}`,
           type: 'assignment',
           date: a.start_date,
-          machine: a.machine?.machine_number ?? 'N/A',
+          machine: a.machine ? `${a.machine.name} · ${a.machine.machine_number}` : 'N/A',
           title: a.project?.name ? `Deployed · ${a.project.name}` : 'Deployment',
           tone: 'blue',
         })

@@ -19,13 +19,14 @@ type ProjectOption = {
 
 type MachineOption = {
   id: string
+  name: string
   machine_number: string
   machine_type: string
   manufacturer: string | null
   model: string | null
 }
 
-type EquipmentItem = ContractLineItem & { machine_id: string; machine_number: string }
+type EquipmentItem = ContractLineItem & { machine_id: string; machine_name: string; machine_number: string }
 
 function emptyTransport(): ContractLineItem {
   return { description: '', model: '', qty: '1', amount: '', period: '', delivery: 'ONE WAY' }
@@ -86,7 +87,7 @@ export function ContractDocModal({
         ? Promise.resolve({ data: [], error: null })
         : (supabase
             .from('machine')
-            .select('id,machine_number,machine_type,manufacturer,model')
+            .select('id,name,machine_number,machine_type,manufacturer,model')
             .eq('current_project_id', projectId)
             .is('deleted_at', null)
             .order('machine_number') as unknown as PromiseLike<{ data: MachineOption[] | null; error: unknown }>),
@@ -118,6 +119,7 @@ export function ContractDocModal({
     setEquipment(
       (machines.data ?? []).map((machine) => ({
         machine_id: machine.id,
+        machine_name: machine.name,
         machine_number: machine.machine_number,
         description: machine.machine_type,
         model: machine.model ?? machine.manufacturer ?? '',
@@ -312,7 +314,7 @@ export function ContractDocModal({
           <div className="doc-line-card" key={row.machine_id}>
             <div className="doc-line-card-head">
               <span className="doc-line-badge">
-                Item {index + 1} · {row.machine_number}
+                Item {index + 1} · {row.machine_name} · {row.machine_number}
               </span>
             </div>
             <div className="form-grid">

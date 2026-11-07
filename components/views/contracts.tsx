@@ -477,7 +477,7 @@ type CoveredRow = {
   deployment_start: string | null
   deployment_end: string | null
   machine_id: string
-  machine: { machine_number: string; machine_type: string } | null
+  machine: { name: string; machine_number: string; machine_type: string } | null
 }
 type ProjectContractRow = {
   id: string
@@ -539,7 +539,7 @@ function ContractModal({
         ? Promise.resolve({ data: [], error: null })
         : (supabase
             .from('contract_machine')
-            .select('id,deployment_start,deployment_end,machine_id,machine:machine_id(machine_number,machine_type)')
+            .select('id,deployment_start,deployment_end,machine_id,machine:machine_id(name,machine_number,machine_type)')
             .eq('contract_id', contract.id)
             .order('deployment_start', { ascending: false }) as unknown as PromiseLike<{
             data: CoveredRow[] | null
@@ -731,8 +731,8 @@ function ContractModal({
               {(covered.data ?? []).map((c) => (
                 <div className="stack-row" key={c.id}>
                   <div>
-                    <b className="mono">{c.machine?.machine_number ?? 'N/A'}</b>
-                    <span>{c.machine?.machine_type ?? ''}</span>
+                    <b>{c.machine?.name ?? 'N/A'}</b>
+                    <span><span className="mono">{c.machine?.machine_number ?? ''}</span> · {c.machine?.machine_type ?? ''}</span>
                   </div>
                   <div className="stack-meta">
                     {shortDate(c.deployment_start)} → {c.deployment_end ? shortDate(c.deployment_end) : 'active'}
@@ -821,7 +821,7 @@ function ContractModal({
         onConfirm={endDeployment}
         message={
           <>
-            <b>{endDeploy?.machine?.machine_number}</b> will be marked as no longer deployed on this contract as of
+            <b>{endDeploy?.machine?.name} ({endDeploy?.machine?.machine_number})</b> will be marked as no longer deployed on this contract as of
             today. The historical deployment record is preserved.
           </>
         }
@@ -1448,7 +1448,7 @@ function BillingRuleFormModal({
 // Add covered machine
 // ---------------------------------------------------------------------------
 
-type MachinePick = { id: string; machine_number: string; machine_type: string }
+type MachinePick = { id: string; name: string; machine_number: string; machine_type: string }
 
 type ProjectPick = { id: string; name: string; site_location: string | null }
 
@@ -1614,7 +1614,7 @@ function AddMachineModal({
         ? Promise.resolve({ data: [], error: null })
         : (supabase
             .from('machine')
-            .select('id,machine_number,machine_type')
+            .select('id,name,machine_number,machine_type')
             .is('deleted_at', null)
             .order('machine_number') as unknown as PromiseLike<{ data: MachinePick[] | null; error: unknown }>),
     [open],
@@ -1700,7 +1700,7 @@ function AddMachineModal({
             <option value="">Select machine</option>
             {available.map((m) => (
               <option key={m.id} value={m.id}>
-                {m.machine_number} · {m.machine_type}
+                {m.name} · {m.machine_number} · {m.machine_type}
               </option>
             ))}
           </select>

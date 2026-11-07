@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { CalendarDays, Download, FileSpreadsheet } from 'lucide-react'
 import { useSupabase } from '@/lib/supabase/use-supabase'
 import { useQuery } from '@/lib/gbi/use-query'
@@ -19,7 +19,7 @@ type Entry = {
   is_billed: boolean
   remarks: string | null
   site_location: string | null
-  machine: { machine_number: string; machine_type: string; chassis_number: string | null } | null
+  machine: { name: string; machine_number: string; machine_type: string; chassis_number: string | null } | null
   operator: { full_name: string } | null
   project: { name: string } | null
   customer: { company_name: string } | null
@@ -27,7 +27,7 @@ type Entry = {
 }
 
 const SELECT =
-  'id,entry_date,hour_meter_start,hour_meter_end,total_hours,is_billed,remarks,site_location,machine:machine_id(machine_number,machine_type,chassis_number),operator:operator_id(full_name),project:project_id(name),customer:customer_id(company_name)'
+  'id,entry_date,hour_meter_start,hour_meter_end,total_hours,is_billed,remarks,site_location,machine:machine_id(name,machine_number,machine_type,chassis_number),operator:operator_id(full_name),project:project_id(name),customer:customer_id(company_name)'
 
 // The export additionally pulls any overtime calculated for each entry so the
 // spreadsheet can show overtime hours and the overtime amount per day.
@@ -89,6 +89,10 @@ export function DailyHoursView({ role, userId }: { role: UserRole; userId: strin
   const [projectFilter, setProjectFilter] = useState<string>('all')
   const dateInputRef = useRef<HTMLInputElement>(null)
 
+  useEffect(() => {
+    setSelectedDate(isoDate(new Date()))
+  }, [])
+
   const entries = useQuery<Entry[]>(
     () =>
       !selectedDate
@@ -128,8 +132,7 @@ export function DailyHoursView({ role, userId }: { role: UserRole; userId: strin
     return (
       <tr key={r.id} className="clickable-row" onClick={() => setSelected(r)}>
         <td>
-          <b className="mono">{r.machine?.machine_number ?? 'N/A'}</b>
-          <div className="muted-cell">{r.machine?.machine_type ?? ''}</div>
+          <b>{r.machine?.name ?? 'N/A'}</b>
         </td>
         <td className="mono">{r.machine?.chassis_number ?? 'N/A'}</td>
         <td>{r.operator?.full_name ?? 'N/A'}</td>
@@ -158,7 +161,7 @@ export function DailyHoursView({ role, userId }: { role: UserRole; userId: strin
 
       <ExportBar />
 
-      <DailyHoursEntry role={role} userId={userId} date={selectedDate} onSaved={entries.reload} />
+      <DailyHoursEntry role={role} userId={userId} date={selectedDate} isToday={isToday} onSaved={entries.reload} />
 
       <div className="hours-toolbar">
         <label
@@ -241,7 +244,7 @@ export function DailyHoursView({ role, userId }: { role: UserRole; userId: strin
           onRetry={entries.reload}
         >
           <div className="table-scroll">
-            <table className="data-table">
+            <table className="data-table daily-hours-table">
               <thead>
                 <tr>
                   <th>Machine</th>
@@ -266,8 +269,8 @@ export function DailyHoursView({ role, userId }: { role: UserRole; userId: strin
         open={!!selected}
         onClose={() => setSelected(null)}
         eyebrow="Daily hour entry"
-        title={selected?.machine?.machine_number ?? ''}
-        subtitle={selected ? `${shortDate(selected.entry_date)} · ${selected.machine?.machine_type ?? ''}` : ''}
+        title={selected?.machine?.name ?? ''}
+        subtitle={selected ? `${selected.machine?.machine_number ?? ''} · ${shortDate(selected.entry_date)} · ${selected.machine?.machine_type ?? ''}` : ''}
       >
         {selected && (
           <DetailGrid

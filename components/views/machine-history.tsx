@@ -17,6 +17,7 @@ import { KpiCard, MiniState, PageHeading, StatusBadge, ViewState } from '@/compo
 
 type MachineOption = {
   id: string
+  name: string
   machine_number: string
   machine_type: string
   manufacturer: string | null
@@ -29,7 +30,7 @@ type MachineOption = {
 }
 
 const MACHINE_SELECT =
-  'id,machine_number,machine_type,manufacturer,model,current_hour_meter,service_interval_hours,current_status,operator:assigned_operator_id(full_name),project:current_project_id(name,site_location)'
+  'id,name,machine_number,machine_type,manufacturer,model,current_hour_meter,service_interval_hours,current_status,operator:assigned_operator_id(full_name),project:current_project_id(name,site_location)'
 
 type HourRow = {
   id: string
@@ -260,7 +261,7 @@ export function MachineHistoryView() {
         <option value="">Select a machine…</option>
         {(machines.data ?? []).map((m) => (
           <option key={m.id} value={m.id}>
-            {m.machine_number} · {m.machine_type}
+            {m.name} · {m.machine_number} · {m.machine_type}
             {m.model ? ` (${m.model})` : ''}
           </option>
         ))}
@@ -296,13 +297,13 @@ export function MachineHistoryView() {
             <div className="mh-machine-head">
               <div>
                 <div className="mh-machine-name">
-                  <b className="mono">{machine.machine_number}</b>
+                  <b>{machine.name}</b>
                   <StatusBadge tone={machineStatusTone(machine.current_status)}>
                     {titleCase(machine.current_status)}
                   </StatusBadge>
                 </div>
                 <span className="muted-cell">
-                  {[machine.manufacturer, machine.model].filter(Boolean).join(' ') || machine.machine_type}
+                  <span className="mono">{machine.machine_number}</span> · {[machine.manufacturer, machine.model].filter(Boolean).join(' ') || machine.machine_type}
                   {machine.operator ? ` · ${machine.operator.full_name}` : ''}
                   {machine.project ? ` · ${machine.project.name}` : ''}
                 </span>

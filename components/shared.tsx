@@ -5,24 +5,13 @@ import { AlertTriangle, ArrowUpRight, Inbox, MoreHorizontal, X } from 'lucide-re
 import type { Tone } from '@/lib/gbi/format'
 import type { QueryStatus } from '@/lib/gbi/use-query'
 
-export function PageHeading({
-  eyebrow,
-  title,
-  action,
-}: {
+export function PageHeading({ action }: {
   eyebrow?: string
   title: string
   action?: React.ReactNode
 }) {
-  return (
-    <div className="page-heading">
-      <div>
-        {eyebrow ? <div className="eyebrow">{eyebrow}</div> : null}
-        <h1 className="page-title">{title}</h1>
-      </div>
-      {action}
-    </div>
-  )
+  if (!action) return null
+  return <div className="page-heading page-heading-actions">{action}</div>
 }
 
 export function StatusBadge({

@@ -6,6 +6,7 @@ import { LocateFixed, MapPin, Minus, Plus } from 'lucide-react'
 import { LoadingSpinner, Modal } from '@/components/shared'
 
 export type FleetMapMachine = {
+  name?: string
   machine_number: string
   project: { name: string; site_location: string | null } | null
 }
@@ -53,7 +54,8 @@ function projectCoordinates(latitude: number, longitude: number, zoom: number) {
 
 function fitZoom(sites: GeocodedSite[], size: MapSize, includeZambiaBoundary: boolean) {
   if (size.width <= 0 || size.height <= 0) return 10
-  if (!includeZambiaBoundary && sites.length < 2) return 10
+  if (!includeZambiaBoundary && sites.length === 1) return 13
+  if (!includeZambiaBoundary && sites.length === 0) return 10
   const points = [
     ...sites.map((site) => projectCoordinates(site.latitude, site.longitude, 0)),
     ...(includeZambiaBoundary
@@ -90,11 +92,12 @@ async function geocode(location: string): Promise<GeocodeResult> {
 
 export function FleetMapModal(
   props:
-    | { machines: FleetMapMachine[]; inline: true; maxZoom?: number }
+    | { machines: FleetMapMachine[]; inline: true; maxZoom?: number; focusLocation?: boolean }
     | { machines: FleetMapMachine[]; open: boolean; onClose: () => void; inline?: false; maxZoom?: number },
 ) {
   const machines = props.machines
   const inline = props.inline === true
+  const focusLocation = inline && props.focusLocation === true
   const maxZoom = props.maxZoom ?? 18
   const open = inline || ('open' in props && props.open)
   const [geocoded, setGeocoded] = useState<GeocodedSite[]>([])
@@ -198,7 +201,7 @@ export function FleetMapModal(
     return () => observer.disconnect()
   }, [active, geocoded.length])
 
-  const zoom = Math.min(maxZoom, Math.max(2, mapZoom ?? fitZoom(geocoded, mapSize, true)))
+  const zoom = Math.min(maxZoom, Math.max(2, mapZoom ?? fitZoom(geocoded, mapSize, !focusLocation)))
   const points = geocoded.map((site) => ({
     site,
     ...projectCoordinates(site.latitude, site.longitude, zoom),
@@ -213,17 +216,18 @@ export function FleetMapModal(
   const outlinePoints = ZAMBIA_BOUNDARY.map(([longitude, latitude]) =>
     projectCoordinates(latitude, longitude, zoom),
   )
-  const center = mapZoom === null
+  const siteCenter = points.length
+    ? {
+        x: points.reduce((sum, point) => sum + point.x, 0) / points.length,
+        y: points.reduce((sum, point) => sum + point.y, 0) / points.length,
+      }
+    : projectCoordinates(-13.1339, 27.8493, zoom)
+  const center = mapZoom === null && !focusLocation
     ? {
         x: (Math.min(...outlinePoints.map((point) => point.x)) + Math.max(...outlinePoints.map((point) => point.x))) / 2,
         y: (Math.min(...outlinePoints.map((point) => point.y)) + Math.max(...outlinePoints.map((point) => point.y))) / 2,
       }
-    : points.length
-      ? {
-        x: points.reduce((sum, point) => sum + point.x, 0) / points.length,
-        y: points.reduce((sum, point) => sum + point.y, 0) / points.length,
-      }
-      : projectCoordinates(-13.1339, 27.8493, zoom)
+    : siteCenter
   const left = center.x - mapSize.width / 2 - panOffset.x
   const top = center.y - mapSize.height / 2 - panOffset.y
   const tileXStart = Math.floor(left / TILE_SIZE)
@@ -365,16 +369,18 @@ export function FleetMapModal(
               style={{ left: tile.x, top: tile.y }}
             />
           ))}
-          <svg
-            className="fleet-map-country-outline"
-            width={mapSize.width}
-            height={mapSize.height}
-            aria-hidden="true"
-          >
-            <path
-              d={`${outlinePoints.map((point, index) => `${index === 0 ? 'M' : 'L'} ${point.x - left} ${point.y - top}`).join(' ')} Z`}
-            />
-          </svg>
+          {!focusLocation ? (
+            <svg
+              className="fleet-map-country-outline"
+              width={mapSize.width}
+              height={mapSize.height}
+              aria-hidden="true"
+            >
+              <path
+                d={`${outlinePoints.map((point, index) => `${index === 0 ? 'M' : 'L'} ${point.x - left} ${point.y - top}`).join(' ')} Z`}
+              />
+            </svg>
+          ) : null}
           {points.map(({ site, x, y }) => {
             const locationKey = site.location.toLocaleLowerCase()
             const selected = selectedLocation === locationKey
@@ -397,7 +403,7 @@ export function FleetMapModal(
                   <div className="fleet-map-popup">
                     <b>{site.location}</b>
                     {site.machines.map((machine) => (
-                      <span key={machine.machine_number}>{machine.machine_number}</span>
+                      <span key={machine.machine_number}>{machine.name ? `${machine.name} · ${machine.machine_number}` : machine.machine_number}</span>
                     ))}
                   </div>
                 ) : null}
@@ -463,7 +469,7 @@ export function FleetMapModal(
           ))}
           {unlocated.map((machine) => (
             <span key={machine.machine_number}>
-              {machine.machine_number}: no current project site location.
+              {machine.name ? `${machine.name} (${machine.machine_number})` : machine.machine_number}: no current project site location.
             </span>
           ))}
         </div>
@@ -471,7 +477,9 @@ export function FleetMapModal(
     </>
   )
 
-  if (props.inline === true) return <div className="fleet-map-inline">{content}</div>
+  if (props.inline === true) {
+    return <div className={`fleet-map-inline${focusLocation ? ' fleet-map-focused' : ''}`}>{content}</div>
+  }
 
   return (
     <Modal

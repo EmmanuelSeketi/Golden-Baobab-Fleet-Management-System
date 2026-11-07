@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { Camera, Eye, Pencil, Trash2 } from 'lucide-react'
+import { Camera, Eye, Grid2X2, List, Pencil, Trash2 } from 'lucide-react'
 import { useSupabase } from '@/lib/supabase/use-supabase'
 import { useQuery } from '@/lib/gbi/use-query'
 import {
@@ -46,6 +46,7 @@ type Operator = {
 
 type MachineLite = {
   id: string
+  name: string
   machine_number: string
   machine_type: string
   assigned_operator_id: string | null
@@ -60,6 +61,7 @@ const STATUS_OPTIONS = ['working', 'off', 'standby']
 export function OperatorsView({ role, userId }: { role: UserRole; userId: string }) {
   const supabase = useSupabase()
   const [query, setQuery] = useState('')
+  const [viewMode, setViewMode] = useState<'list' | 'grid'>('grid')
   const [selected, setSelected] = useState<Operator | null>(null)
   const [formTarget, setFormTarget] = useState<Operator | null>(null)
   const [formMode, setFormMode] = useState<'add' | 'edit' | null>(null)
@@ -82,7 +84,7 @@ export function OperatorsView({ role, userId }: { role: UserRole; userId: string
     () =>
       supabase
         .from('machine')
-        .select('id,machine_number,machine_type,assigned_operator_id,current_project_id')
+        .select('id,name,machine_number,machine_type,assigned_operator_id,current_project_id')
         .is('deleted_at', null)
         .order('machine_number') as unknown as PromiseLike<{ data: MachineLite[] | null; error: unknown }>,
     [],
@@ -201,6 +203,28 @@ export function OperatorsView({ role, userId }: { role: UserRole; userId: string
             onChange={(e) => setQuery(e.target.value)}
           />
         </div>
+        <div className="fleet-view-toggle" role="group" aria-label="Operator view">
+          <button
+            type="button"
+            className={viewMode === 'list' ? 'active' : ''}
+            aria-label="List view"
+            aria-pressed={viewMode === 'list'}
+            title="List view"
+            onClick={() => setViewMode('list')}
+          >
+            <List size={16} />
+          </button>
+          <button
+            type="button"
+            className={viewMode === 'grid' ? 'active' : ''}
+            aria-label="Grid view"
+            aria-pressed={viewMode === 'grid'}
+            title="Grid view"
+            onClick={() => setViewMode('grid')}
+          >
+            <Grid2X2 size={16} />
+          </button>
+        </div>
       </div>
 
       <div className="panel">
@@ -212,7 +236,7 @@ export function OperatorsView({ role, userId }: { role: UserRole; userId: string
           emptyText={query ? 'No operators match your search.' : 'No operators registered yet.'}
           onRetry={operators.reload}
         >
-          <div className="table-scroll">
+          {viewMode === 'list' ? <div className="table-scroll">
             <table className="data-table">
               <thead>
                 <tr>
@@ -298,7 +322,74 @@ export function OperatorsView({ role, userId }: { role: UserRole; userId: string
                 })}
               </tbody>
             </table>
-          </div>
+          </div> : (
+            <div className="operator-card-grid">
+              {rows.map((operator) => {
+                const assigned = assignedFor(operator.id)
+                const initials = operator.full_name
+                  .split(/\s+/)
+                  .slice(0, 2)
+                  .map((part) => part[0])
+                  .join('')
+                  .toUpperCase()
+                const pictureUrl = operator.profile_picture_path
+                  ? supabase.storage.from('operator-profiles').getPublicUrl(operator.profile_picture_path).data.publicUrl
+                  : null
+                return (
+                  <article
+                    key={operator.id}
+                    className="operator-card"
+                    role="button"
+                    tabIndex={0}
+                    aria-label={`View ${operator.full_name} details`}
+                    onClick={() => setSelected(operator)}
+                    onKeyDown={(event) => {
+                      if (event.target !== event.currentTarget) return
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault()
+                        setSelected(operator)
+                      }
+                    }}
+                  >
+                    <div className="operator-card-head">
+                      <div className="operator-card-identity">
+                        <h3>{operator.full_name}</h3>
+                        <span>{operator.nrc_number ?? 'No NRC recorded'}</span>
+                      </div>
+                      <StatusBadge tone={operatorStatusTone(operator.status)}>
+                        {OPERATOR_STATUS_LABEL[operator.status] ?? titleCase(operator.status)}
+                      </StatusBadge>
+                    </div>
+                    {pictureUrl ? (
+                      <img className="operator-card-image" src={pictureUrl} alt={operator.full_name} />
+                    ) : (
+                      <div className="operator-card-image operator-card-image-empty" aria-hidden="true">{initials}</div>
+                    )}
+                    <dl className="operator-card-details">
+                      <div><dt>Phone</dt><dd>{operator.phone_number ?? 'N/A'}</dd></div>
+                      <div><dt>Assigned machine</dt><dd>{assigned.map((machine) => machine.name).join(', ') || 'N/A'}</dd></div>
+                      <div><dt>Employment date</dt><dd>{shortDate(operator.employment_date)}</dd></div>
+                      <div><dt>Certification</dt><dd>{operator.certifications ?? 'N/A'}</dd></div>
+                    </dl>
+                    <div className="operator-card-actions" onClick={(event) => event.stopPropagation()}>
+                      <RowActions
+                        label={`Actions for ${operator.full_name}`}
+                        actions={[
+                          { label: 'View details', icon: Eye, onClick: () => setSelected(operator) },
+                          ...(canManage
+                            ? [
+                                { label: 'Edit operator', icon: Pencil, onClick: () => { setFormTarget(operator); setFormMode('edit') } },
+                                { label: 'Delete operator', icon: Trash2, danger: true, onClick: () => setDeleting(operator) },
+                              ]
+                            : []),
+                        ]}
+                      />
+                    </div>
+                  </article>
+                )
+              })}
+            </div>
+          )}
         </ViewState>
       </div>
 
@@ -364,14 +455,14 @@ type AssignmentRow = {
   id: string
   start_date: string
   end_date: string | null
-  machine: { machine_number: string; machine_type: string } | null
+  machine: { name: string; machine_number: string; machine_type: string } | null
   project: { name: string } | null
 }
 type HourRow = {
   id: string
   entry_date: string
   total_hours: number | null
-  machine: { machine_number: string } | null
+  machine: { name: string; machine_number: string } | null
 }
 
 function OperatorModal({
@@ -397,7 +488,7 @@ function OperatorModal({
         ? Promise.resolve({ data: [], error: null })
         : (supabase
             .from('machine_assignment')
-            .select('id,start_date,end_date,machine:machine_id(machine_number,machine_type),project:project_id(name)')
+            .select('id,start_date,end_date,machine:machine_id(name,machine_number,machine_type),project:project_id(name)')
             .eq('operator_id', operator.id)
             .order('start_date', { ascending: false })
             .limit(8) as unknown as PromiseLike<{ data: AssignmentRow[] | null; error: unknown }>),
@@ -410,7 +501,7 @@ function OperatorModal({
         ? Promise.resolve({ data: [], error: null })
         : (supabase
             .from('daily_hour_entry')
-            .select('id,entry_date,total_hours,machine:machine_id(machine_number)')
+            .select('id,entry_date,total_hours,machine:machine_id(name,machine_number)')
             .eq('operator_id', operator.id)
             .order('entry_date', { ascending: false })
             .limit(10) as unknown as PromiseLike<{ data: HourRow[] | null; error: unknown }>),
@@ -427,7 +518,6 @@ function OperatorModal({
     <Modal
       open={!!operator}
       onClose={onClose}
-      eyebrow="Operator profile"
       title={operator?.full_name ?? ''}
       subtitle={operator?.nrc_number ? `NRC ${operator.nrc_number}` : undefined}
       footer={
@@ -452,27 +542,13 @@ function OperatorModal({
     >
       {operator && (
         <>
-          {profilePictureUrl && (
-            <div className="operator-profile-image">
-              <img src={profilePictureUrl} alt={`${operator.full_name} profile`} />
+          {profilePictureUrl ? (
+            <img className="operator-detail-image" src={profilePictureUrl} alt={`${operator.full_name} profile`} />
+          ) : (
+            <div className="operator-detail-image operator-detail-image-empty" aria-hidden="true">
+              {operator.full_name.split(/\s+/).slice(0, 2).map((part) => part[0]).join('').toUpperCase()}
             </div>
           )}
-          <div className="operator-profile-summary">
-            {!profilePictureUrl && (
-              <span className="operator-avatar-placeholder" aria-hidden="true">
-                {operator.full_name
-                  .split(/\s+/)
-                  .slice(0, 2)
-                  .map((part) => part[0])
-                  .join('')
-                  .toUpperCase()}
-              </span>
-            )}
-            <div>
-              <b>{operator.full_name}</b>
-              <span>{operator.phone_number ?? 'Operator profile'}</span>
-            </div>
-          </div>
           <DetailGrid
             items={[
               ['Status', OPERATOR_STATUS_LABEL[operator.status] ?? titleCase(operator.status)],
@@ -500,7 +576,8 @@ function OperatorModal({
             {(assignments.data ?? []).map((a) => (
               <div className="stack-row" key={a.id}>
                 <div>
-                  <b className="mono">{a.machine?.machine_number ?? 'N/A'}</b>
+                  <b>{a.machine?.name ?? 'N/A'}</b>
+                  <span className="mono">{a.machine?.machine_number ?? ''}</span>
                   <span>{a.project?.name ?? 'No project'}</span>
                 </div>
                 <div className="stack-meta">
@@ -520,7 +597,8 @@ function OperatorModal({
             {(recentHours.data ?? []).map((h) => (
               <div className="stack-row" key={h.id}>
                 <div>
-                  <b className="mono">{h.machine?.machine_number ?? 'N/A'}</b>
+                  <b>{h.machine?.name ?? 'N/A'}</b>
+                  <span className="mono">{h.machine?.machine_number ?? ''}</span>
                   <span>{shortDate(h.entry_date)}</span>
                 </div>
                 <div className="stack-meta">{fmtHours(h.total_hours)}</div>
@@ -881,7 +959,7 @@ function OperatorFormModal({
                           : ''
                       return (
                         <option key={m.id} value={m.id}>
-                          {m.machine_number} · {m.machine_type}{reassignment}
+                          {m.name} · {m.machine_number} · {m.machine_type}{reassignment}
                         </option>
                       )
                     })}
@@ -906,7 +984,7 @@ function OperatorFormModal({
                         : ''
                     return (
                       <option key={m.id} value={m.id}>
-                        {m.machine_number} · {m.machine_type}{reassignment}
+                        {m.name} · {m.machine_number} · {m.machine_type}{reassignment}
                       </option>
                     )
                   })}

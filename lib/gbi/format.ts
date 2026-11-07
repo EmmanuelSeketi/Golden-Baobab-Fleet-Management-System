@@ -5,10 +5,17 @@
 export type Tone = 'green' | 'amber' | 'red' | 'blue' | 'neutral'
 
 export function friendlyError(error: unknown): string {
+  const code =
+    typeof error === 'object' && error && 'code' in error
+      ? String((error as { code: unknown }).code)
+      : ''
   const message =
     typeof error === 'object' && error && 'message' in error
       ? String((error as { message: unknown }).message)
       : ''
+  if ((code === '42703' || code === 'PGRST204') && /status_override/i.test(message)) {
+    return 'Maintenance data needs a schema update. Run scripts/015_maintenance_status_override.sql in Supabase, then retry.'
+  }
   // RLS denials surface as permission errors : tell the user it is access,
   // not a fabricated success.
   if (/permission|rls|policy|denied/i.test(message)) {

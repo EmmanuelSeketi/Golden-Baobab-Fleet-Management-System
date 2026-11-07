@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { AlertTriangle, Eye, Image as ImageIcon, MapPin, Pencil, Plus, Trash2 } from 'lucide-react'
+import { AlertTriangle, Eye, Grid2X2, Image as ImageIcon, List, MapPin, Pencil, Plus, Trash2 } from 'lucide-react'
 import { useSupabase } from '@/lib/supabase/use-supabase'
 import { useQuery } from '@/lib/gbi/use-query'
 import { maintenanceEffectiveStatus } from '@/lib/gbi/maintenance'
@@ -24,6 +24,7 @@ import { FleetMapModal } from '@/components/views/fleet-map-modal'
 
 type Machine = {
   id: string
+  name: string
   machine_number: string
   asset_number: string | null
   registration_number: string | null
@@ -48,7 +49,7 @@ type Machine = {
 }
 
 const LIST_SELECT =
-  'id,machine_number,asset_number,registration_number,chassis_number,engine_number,machine_type,machine_image_path,manufacturer,brand,model,year,current_hour_meter,service_interval_hours,purchase_date,purchase_price,current_status,machine_location,assigned_operator_id,current_project_id,operator:assigned_operator_id(full_name),project:current_project_id(name,site_location)'
+  'id,name,machine_number,asset_number,registration_number,chassis_number,engine_number,machine_type,machine_image_path,manufacturer,brand,model,year,current_hour_meter,service_interval_hours,purchase_date,purchase_price,current_status,machine_location,assigned_operator_id,current_project_id,operator:assigned_operator_id(full_name),project:current_project_id(name,site_location)'
 const LEGACY_LIST_SELECT = LIST_SELECT.replace('machine_location,', '')
 
 function isMissingMachineLocationColumn(error: unknown): boolean {
@@ -73,6 +74,7 @@ const MACHINE_STATUSES = [
 export function FleetView({ role, userId }: { role: UserRole; userId: string }) {
   const supabase = useSupabase()
   const [query, setQuery] = useState('')
+  const [viewMode, setViewMode] = useState<'list' | 'grid'>('grid')
   const [mapOpen, setMapOpen] = useState(false)
   const [selected, setSelected] = useState<Machine | null>(null)
   const [formTarget, setFormTarget] = useState<Machine | null>(null)
@@ -119,7 +121,8 @@ export function FleetView({ role, userId }: { role: UserRole; userId: string }) 
     const q = query.toLowerCase()
     return all.filter(
       (m) =>
-        m.machine_number.toLowerCase().includes(q) ||
+        m.name.toLowerCase().includes(q) ||
+          m.machine_number.toLowerCase().includes(q) ||
           m.machine_type.toLowerCase().includes(q) ||
           (m.chassis_number ?? '').toLowerCase().includes(q),
     )
@@ -219,6 +222,28 @@ export function FleetView({ role, userId }: { role: UserRole; userId: string }) 
             onChange={(e) => setQuery(e.target.value)}
           />
         </div>
+        <div className="fleet-view-toggle" role="group" aria-label="Fleet view">
+          <button
+            type="button"
+            className={viewMode === 'list' ? 'active' : ''}
+            aria-label="List view"
+            aria-pressed={viewMode === 'list'}
+            title="List view"
+            onClick={() => setViewMode('list')}
+          >
+            <List size={16} />
+          </button>
+          <button
+            type="button"
+            className={viewMode === 'grid' ? 'active' : ''}
+            aria-label="Grid view"
+            aria-pressed={viewMode === 'grid'}
+            title="Grid view"
+            onClick={() => setViewMode('grid')}
+          >
+            <Grid2X2 size={16} />
+          </button>
+        </div>
         <button className="button button-secondary" onClick={() => setMapOpen(true)}>
           <MapPin size={15} />
           Fleet Map
@@ -234,15 +259,16 @@ export function FleetView({ role, userId }: { role: UserRole; userId: string }) 
           emptyText={query ? 'No machines match your search.' : 'No machines registered yet.'}
           onRetry={machines.reload}
         >
-          <div className="table-scroll">
-            <table className="data-table">
+          {viewMode === 'list' ? (
+            <div className="table-scroll">
+              <table className="data-table fleet-register-table">
               <thead>
                 <tr>
                   <th>Machine</th>
-                  <th>Type</th>
                   <th>Hour meter</th>
                   <th>Operator</th>
                   <th>Deployment</th>
+                  <th>Location</th>
                   <th>Status</th>
                   <th className="col-actions">Actions</th>
                 </tr>
@@ -264,18 +290,15 @@ export function FleetView({ role, userId }: { role: UserRole; userId: string }) 
                           </span>
                         )}
                         <div>
-                          <b className="mono">{m.machine_number}</b>
-                          <div className="muted-cell">{m.model ?? ''}</div>
+                          <b>{m.name}</b>
+                          <div className="muted-cell"><span className="mono">{m.machine_number}</span>{m.model ? ` · ${m.model}` : ''}</div>
                         </div>
                       </div>
                     </td>
-                    <td>{m.machine_type}</td>
                     <td className="mono num">{meter(m.current_hour_meter)}</td>
                     <td>{m.operator?.full_name ?? 'N/A'}</td>
-                    <td>
-                      {m.project?.name ?? 'N/A'}
-                      <div className="muted-cell">{m.machine_location ?? m.project?.site_location ?? 'No location recorded'}</div>
-                    </td>
+                    <td>{m.project?.name ?? 'N/A'}</td>
+                    <td>{m.machine_location?.trim() || m.project?.site_location?.trim() || 'N/A'}</td>
                     <td>
                       <StatusBadge tone={machineStatusTone(m.current_status)}>
                         {titleCase(m.current_status)}
@@ -283,7 +306,7 @@ export function FleetView({ role, userId }: { role: UserRole; userId: string }) 
                     </td>
                     <td className="col-actions" onClick={(e) => e.stopPropagation()}>
                       <RowActions
-                        label={`Actions for ${m.machine_number}`}
+                        label={`Actions for ${m.name}`}
                         actions={[
                           { label: 'View details', icon: Eye, onClick: () => setSelected(m) },
                           ...(canManage
@@ -310,8 +333,70 @@ export function FleetView({ role, userId }: { role: UserRole; userId: string }) 
                   </tr>
                 ))}
               </tbody>
-            </table>
-          </div>
+              </table>
+            </div>
+          ) : (
+            <div className="fleet-machine-grid">
+              {rows.map((machine) => (
+                <article
+                  key={machine.id}
+                  className="fleet-machine-card"
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`View ${machine.name} details`}
+                  onClick={() => setSelected(machine)}
+                  onKeyDown={(event) => {
+                    if (event.target !== event.currentTarget) return
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault()
+                      setSelected(machine)
+                    }
+                  }}
+                >
+                  <div className="fleet-machine-card-head">
+                    <div className="fleet-machine-card-identity">
+                      <h3>{machine.name}</h3>
+                      <span className="mono">{machine.machine_number}</span>
+                    </div>
+                    <StatusBadge tone={machineStatusTone(machine.current_status)}>
+                      {titleCase(machine.current_status)}
+                    </StatusBadge>
+                  </div>
+                  {machine.machine_image_path ? (
+                    <img
+                      className="fleet-machine-card-image"
+                      src={supabase.storage.from('machine-images').getPublicUrl(machine.machine_image_path).data.publicUrl}
+                      alt={machine.name}
+                    />
+                  ) : (
+                    <div className="fleet-machine-card-image fleet-machine-card-image-empty" aria-hidden="true">
+                      <ImageIcon size={28} />
+                    </div>
+                  )}
+                  <dl className="fleet-machine-card-details">
+                    <div><dt>Hour meter</dt><dd>{meter(machine.current_hour_meter)}</dd></div>
+                    <div><dt>Operator</dt><dd>{machine.operator?.full_name ?? 'N/A'}</dd></div>
+                    <div><dt>Deployment</dt><dd>{machine.project?.name ?? 'N/A'}</dd></div>
+                    <div><dt>Location</dt><dd>{machine.machine_location?.trim() || machine.project?.site_location?.trim() || 'N/A'}</dd></div>
+                  </dl>
+                  <div className="fleet-machine-card-actions" onClick={(event) => event.stopPropagation()}>
+                    <RowActions
+                      label={`Actions for ${machine.name}`}
+                      actions={[
+                        { label: 'View details', icon: Eye, onClick: () => setSelected(machine) },
+                        ...(canManage
+                          ? [
+                              { label: 'Edit machine', icon: Pencil, onClick: () => { setFormTarget(machine); setFormMode('edit') } },
+                              { label: 'Delete machine', icon: Trash2, danger: true, onClick: () => setDeleting(machine) },
+                            ]
+                          : []),
+                      ]}
+                    />
+                  </div>
+                </article>
+              ))}
+            </div>
+          )}
         </ViewState>
       </div>
 
@@ -364,7 +449,7 @@ export function FleetView({ role, userId }: { role: UserRole; userId: string }) 
         onConfirm={confirmDelete}
         message={
           <>
-            <b>{deleting?.machine_number}</b> will be archived (soft delete) and removed from the register.
+            <b>{deleting?.name}</b> ({deleting?.machine_number}) will be archived (soft delete) and removed from the register.
             Its hours, maintenance, repairs and assignment history are preserved and can be restored in the
             database.
             {deleteError && <span className="confirm-error">{deleteError}</span>}
@@ -471,14 +556,15 @@ function MachineModal({
           }),
     [machine?.id],
   )
+  const mapLocation = machine?.machine_location?.trim() || machine?.project?.site_location?.trim() || null
 
   return (
     <Modal
       open={!!machine}
       onClose={onClose}
       eyebrow="Machine detail"
-      title={machine?.machine_number ?? ''}
-      subtitle={machine ? `${machine.machine_type}${machine.model ? ` · ${machine.model}` : ''}` : ''}
+      title={machine?.name ?? ''}
+      subtitle={machine ? `${machine.machine_number} · ${machine.machine_type}${machine.model ? ` · ${machine.model}` : ''}` : ''}
       footer={
         machine ? (
           <div className="modal-foot-split">
@@ -512,6 +598,7 @@ function MachineModal({
           )}
           <DetailGrid
             items={[
+              ['Machine name', machine.name],
               ['Asset number', machine.asset_number ?? 'N/A'],
               ['Registration', machine.registration_number ?? 'N/A'],
               ['Chassis number', machine.chassis_number ?? 'N/A'],
@@ -530,14 +617,10 @@ function MachineModal({
           />
 
           <ModalSection title="Current machine location">
-            {machine.machine_location ?? machine.project?.site_location ? (
-              <iframe
-                className="machine-location-map"
-                title={`Map showing ${machine.machine_location ?? machine.project?.site_location}`}
-                src={`https://www.google.com/maps?q=${encodeURIComponent(`${machine.machine_location ?? machine.project?.site_location}, Zambia`)}&output=embed`}
-                loading="lazy"
-                referrerPolicy="no-referrer-when-downgrade"
-              />
+            {mapLocation ? (
+              <div className="fleet-machine-map">
+                <GoogleMachineMap location={mapLocation} machineName={machine.name} />
+              </div>
             ) : (
               <p className="muted-cell">No location data available</p>
             )}
@@ -618,6 +701,42 @@ function MachineModal({
   )
 }
 
+function GoogleMachineMap({ location, machineName }: { location: string; machineName: string }) {
+  const [mapType, setMapType] = useState<'m' | 'k' | 'p'>('m')
+  const mapUrl = `https://maps.google.com/maps?q=${encodeURIComponent(`${location}, Zambia`)}&t=${mapType}&z=15&output=embed`
+  const mapTypes = [
+    { value: 'm', label: 'Street' },
+    { value: 'k', label: 'Satellite' },
+    { value: 'p', label: 'Terrain' },
+  ] as const
+
+  return (
+    <div className="google-machine-map">
+      <div className="google-map-type-toggle" role="group" aria-label="Google Maps type">
+        {mapTypes.map((option) => (
+          <button
+            key={option.value}
+            type="button"
+            aria-pressed={mapType === option.value}
+            className={mapType === option.value ? 'active' : ''}
+            onClick={() => setMapType(option.value)}
+          >
+            {option.label}
+          </button>
+        ))}
+      </div>
+      <iframe
+        className="google-machine-map-frame"
+        title={`${machineName} location on Google Maps`}
+        src={mapUrl}
+        loading="lazy"
+        allowFullScreen
+        referrerPolicy="no-referrer-when-downgrade"
+      />
+    </div>
+  )
+}
+
 type OptionRow = { id: string; label: string }
 
 function MachineFormModal({
@@ -688,6 +807,7 @@ function MachineFormModal({
     if (!open) return
     if (mode === 'edit' && machine) {
       setForm({
+        name: machine.name ?? '',
         machine_number: machine.machine_number ?? '',
         asset_number: str(machine.asset_number),
         registration_number: str(machine.registration_number),
@@ -744,6 +864,7 @@ function MachineFormModal({
   async function submit() {
     if (photoBusy) return
     const errors: Record<string, string> = {}
+    if (!form.name?.trim()) errors.name = 'Machine name is required.'
     if (!form.machine_number?.trim()) errors.machine_number = 'Machine number is required.'
     if (!form.machine_type?.trim()) errors.machine_type = 'Machine type is required.'
     if (form.year && !/^\d{4}$/.test(form.year.trim())) errors.year = 'Enter a 4-digit year.'
@@ -755,6 +876,7 @@ function MachineFormModal({
     const num = (k: string) => (form[k]?.trim() ? Number(form[k]) : null)
 
     const payload = {
+      name: form.name.trim(),
       machine_number: form.machine_number.trim(),
       asset_number: text('asset_number'),
       registration_number: text('registration_number'),
@@ -952,6 +1074,14 @@ function MachineFormModal({
           </div>
         </div>
 
+        <Field
+          label="Machine name"
+          required
+          value={form.name ?? ''}
+          onChange={(v) => set('name', v)}
+          error={fieldErrors.name}
+          placeholder="e.g. North Site Loader"
+        />
         <Field
           label="Machine number"
           required

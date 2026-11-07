@@ -11,7 +11,7 @@ import {
   TextRun,
   WidthType,
 } from 'docx'
-import type { LogoChoice } from '@/lib/gbi/contract-doc'
+import { GBI_LOGO_URL, SDLG_LOGO_URL, type LogoChoice } from '@/lib/gbi/contract-doc'
 
 export type LifecycleDocumentType = 'entry' | 'checkpoint' | 'exit'
 export type LifecycleMeasurement = 'hours' | 'mileage'
@@ -53,9 +53,9 @@ export type EquipmentLifecycleDocumentData = LifecycleSignatureFields & {
 const COMPANY = 'GOLDEN BAOBAB INVESTMENTS LTD'
 const ADDRESS = 'Add: Great North Road, Lusaka, Zambia   Email: goldenbaobab2@gmail.com   Cell: 0979018888'
 const FONT = 'Calibri'
-const LOGO_FILES: Record<Exclude<LogoChoice, 'none'>, { src: string; width: number; height: number }> = {
-  gbi: { src: '/logo-gbi.jpeg', width: 72, height: 108 },
-  sdlg: { src: '/logo-sdlg.jpeg', width: 96, height: 96 },
+const LOGO_FILES: Record<Exclude<LogoChoice, 'none'>, { src: string; width: number; height: number; type: 'png' | 'jpg' }> = {
+  gbi: { src: GBI_LOGO_URL, width: 72, height: 104, type: 'png' },
+  sdlg: { src: SDLG_LOGO_URL, width: 96, height: 98, type: 'png' },
 }
 
 export const LIFECYCLE_DOCUMENTS: Record<LifecycleDocumentType, { title: string; chinese: string; action: string }> = {
@@ -225,7 +225,7 @@ function buildDocument(data: EquipmentLifecycleDocumentData, logo?: { data: Arra
           spacing: { after: 40 },
           children: [new ImageRun({
             data: logo.data,
-            type: 'jpg',
+            type: logo.type,
             transformation: { width: logo.width, height: logo.height },
           })],
         })]
@@ -274,6 +274,7 @@ export async function buildEquipmentLifecycleDocument(data: EquipmentLifecycleDo
       data: await response.arrayBuffer(),
       width: details.width,
       height: details.height,
+      type: details.type,
     }
   }
   return Packer.toBlob(buildDocument(data, logo))

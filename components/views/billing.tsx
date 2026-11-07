@@ -106,7 +106,7 @@ export function BillingView({ role, userId }: { role: UserRole; userId: string }
           canManage ? (
             <button className="button button-primary" onClick={() => setCreating(true)}>
               <Plus size={15} />
-              New invoice
+              New quotation
             </button>
           ) : undefined
         }

@@ -30,12 +30,13 @@ type Maintenance = {
   cost: number | null
   status: string
   status_override: boolean
-  machine: { machine_number: string; machine_type: string } | null
+  machine: { name: string; machine_number: string; machine_type: string } | null
   machine_id: string
 }
 
 type MachineLite = {
   id: string
+  name: string
   machine_number: string
   machine_type: string
 }
@@ -43,7 +44,7 @@ type MachineLite = {
 const STATUSES = ['all', 'upcoming', 'due', 'overdue', 'completed']
 const STATUS_OPTIONS = ['automatic', 'upcoming', 'due', 'overdue', 'completed']
 const LIST_SELECT =
-  'id,machine_id,service_date,hour_meter_at_service,next_service_due_hours,next_service_due_date,service_type,mechanic,parts_replaced,cost,status,status_override,machine:machine_id(machine_number,machine_type)'
+  'id,machine_id,service_date,hour_meter_at_service,next_service_due_hours,next_service_due_date,service_type,mechanic,parts_replaced,cost,status,status_override,machine:machine_id(name,machine_number,machine_type)'
 
 const today = () => new Date().toISOString().slice(0, 10)
 
@@ -71,7 +72,7 @@ export function MaintenanceView({ role, userId }: { role: UserRole; userId: stri
     () =>
       supabase
         .from('machine')
-        .select('id,machine_number,machine_type')
+        .select('id,name,machine_number,machine_type')
         .is('deleted_at', null)
         .order('machine_number') as unknown as PromiseLike<{ data: MachineLite[] | null; error: unknown }>,
     [],
@@ -182,8 +183,8 @@ export function MaintenanceView({ role, userId }: { role: UserRole; userId: stri
                 {rows.map((r) => (
                   <tr key={r.id} className="clickable-row" onClick={() => setSelected(r)}>
                     <td>
-                      <b className="mono">{r.machine?.machine_number ?? 'N/A'}</b>
-                      <div className="muted-cell">{r.machine?.machine_type ?? ''}</div>
+                      <b>{r.machine?.name ?? 'N/A'}</b>
+                      <div className="muted-cell"><span className="mono">{r.machine?.machine_number ?? ''}</span> · {r.machine?.machine_type ?? ''}</div>
                     </td>
                     <td>{shortDate(r.service_date)}</td>
                     <td>{r.service_type ?? 'N/A'}</td>
@@ -224,8 +225,8 @@ export function MaintenanceView({ role, userId }: { role: UserRole; userId: stri
         open={!!selected}
         onClose={() => setSelected(null)}
         eyebrow="Maintenance record"
-        title={selected?.machine?.machine_number ?? ''}
-        subtitle={selected ? `${selected.service_type ?? 'Service'} · ${shortDate(selected.service_date)}` : ''}
+        title={selected?.machine?.name ?? ''}
+        subtitle={selected ? `${selected.machine?.machine_number ?? ''} · ${selected.service_type ?? 'Service'} · ${shortDate(selected.service_date)}` : ''}
         footer={
           selected ? (
             <div className="modal-foot-split">
@@ -253,7 +254,8 @@ export function MaintenanceView({ role, userId }: { role: UserRole; userId: stri
         {selected && (
           <DetailGrid
             items={[
-              ['Machine', selected.machine?.machine_number ?? 'N/A'],
+              ['Machine name', selected.machine?.name ?? 'N/A'],
+              ['Machine number', selected.machine?.machine_number ?? 'N/A'],
               ['Machine type', selected.machine?.machine_type ?? 'N/A'],
               ['Service date', shortDate(selected.service_date)],
               ['Service type', selected.service_type ?? 'N/A'],
@@ -424,7 +426,7 @@ function MaintenanceFormModal({
             <option value="">Select machine</option>
             {machines.map((m) => (
               <option key={m.id} value={m.id}>
-                {m.machine_number} · {m.machine_type}
+                {m.name} · {m.machine_number} · {m.machine_type}
               </option>
             ))}
           </select>

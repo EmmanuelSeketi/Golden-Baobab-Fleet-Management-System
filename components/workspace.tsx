@@ -12,6 +12,7 @@ import {
   Clock,
   ChevronDown,
   FolderKanban,
+  HardHat,
   Hammer,
   History,
   LayoutDashboard,
@@ -27,7 +28,6 @@ import {
   Sun,
   Timer,
   Truck,
-  Users,
   Wrench,
   X,
 } from 'lucide-react'
@@ -80,11 +80,11 @@ const NAV: NavGroup[] = [
       { module: 'Overview', label: 'Dashboard', zh: '仪表板', icon: LayoutDashboard },
       { module: 'Daily Hours', label: 'Daily Working Hours', zh: '每日工时', icon: Clock },
       { module: 'Fleet', label: 'Fleet Register', zh: '车队登记', iconSrc: excavatorUrl },
+      { module: 'Operators', label: 'Operators', zh: '操作员', icon: HardHat },
+      { module: 'Overtime', label: 'Operator Overtime', zh: '操作员加班', icon: Timer },
       { module: 'Projects', label: 'Projects & Sites', zh: '项目与工地', icon: FolderKanban },
       { module: 'Equipment Lifecycle', label: 'Equipment Lifecycle', zh: '设备生命周期', icon: ClipboardCheck },
       { module: 'Machine History', label: 'Machine History', zh: '机器历史', icon: History },
-      { module: 'Operators', label: 'Operators', zh: '操作员', icon: Users },
-      { module: 'Overtime', label: 'Operator Overtime', zh: '操作员加班', icon: Timer },
     ],
   },
   {
@@ -92,7 +92,7 @@ const NAV: NavGroup[] = [
     zh: '商务',
     items: [
       { module: 'Customers & Contracts', label: 'Customers & Contracts', zh: '客户与合同', icon: Handshake },
-      { module: 'Hiring Quotations', label: 'Invoice', zh: '发票', icon: FileText },
+      { module: 'Hiring Quotations', label: 'Quotation', zh: '报价单', icon: FileText },
       { module: 'Reports', label: 'Reports', zh: '报表', icon: BarChart3 },
     ],
   },
@@ -281,7 +281,7 @@ function WorkspaceInner({ profile, email }: { profile: AppUser; email: string })
                       onClick={() => go(item.module)}
                     >
                       {item.iconSrc ? (
-                        <img src={item.iconSrc} alt="" width={22} height={22} />
+                        <img src={item.iconSrc} alt="" width={24} height={24} />
                       ) : Icon ? (
                         <Icon size={16} />
                       ) : null}

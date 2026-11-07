@@ -11,7 +11,7 @@ import {
   TextRun,
   WidthType,
 } from 'docx'
-import type { LogoChoice } from '@/lib/gbi/contract-doc'
+import { GBI_LOGO_URL, SDLG_LOGO_URL, type LogoChoice } from '@/lib/gbi/contract-doc'
 
 export type QuotationLineItem = {
   model: string
@@ -33,11 +33,11 @@ export type QuotationDocData = {
   logo?: LogoChoice
 }
 
-type LoadedLogo = { data: ArrayBuffer; width: number; height: number }
+type LoadedLogo = { data: ArrayBuffer; width: number; height: number; type: 'png' | 'jpg' }
 
-const LOGO_FILES: Record<Exclude<LogoChoice, 'none'>, { src: string; width: number; height: number }> = {
-  gbi: { src: '/logo-gbi.jpeg', width: 60, height: 90 },
-  sdlg: { src: '/logo-sdlg.jpeg', width: 80, height: 80 },
+const LOGO_FILES: Record<Exclude<LogoChoice, 'none'>, { src: string; width: number; height: number; type: 'png' | 'jpg' }> = {
+  gbi: { src: GBI_LOGO_URL, width: 60, height: 87, type: 'png' },
+  sdlg: { src: SDLG_LOGO_URL, width: 80, height: 82, type: 'png' },
 }
 
 const FONT = 'Calibri'
@@ -230,7 +230,7 @@ export function buildQuotationDoc(data: QuotationDocData, logo?: LoadedLogo): Do
       new Paragraph({
         alignment: AlignmentType.CENTER,
         spacing: { after: 40 },
-        children: [new ImageRun({ data: logo.data, type: 'jpg', transformation: { width: logo.width, height: logo.height } })],
+        children: [new ImageRun({ data: logo.data, type: logo.type, transformation: { width: logo.width, height: logo.height } })],
       }),
     )
   }
@@ -284,7 +284,7 @@ async function loadLogo(choice: LogoChoice): Promise<LoadedLogo | undefined> {
   try {
     const res = await fetch(meta.src)
     if (!res.ok) return undefined
-    return { data: await res.arrayBuffer(), width: meta.width, height: meta.height }
+    return { data: await res.arrayBuffer(), width: meta.width, height: meta.height, type: meta.type }
   } catch {
     return undefined
   }

@@ -48,7 +48,7 @@ const RULE_SELECT =
 
 // Source daily entries (the single source of truth for overtime hours).
 const ENTRY_SELECT =
-  'id,entry_date,operator_id,total_hours,operator:operator_id(full_name,base_salary),machine:machine_id(id,machine_number)'
+  'id,entry_date,operator_id,total_hours,operator:operator_id(full_name,base_salary),machine:machine_id(id,name,machine_number)'
 
 type EntryRow = {
   id: string
@@ -56,7 +56,7 @@ type EntryRow = {
   operator_id: string | null
   total_hours: number
   operator: { full_name: string; base_salary: number | null } | null
-  machine: { id: string; machine_number: string } | null
+  machine: { id: string; name: string; machine_number: string } | null
 }
 
 type PersistedRow = {
@@ -162,7 +162,7 @@ export function OvertimeView({ role, userId }: { role: UserRole; userId: string 
         baseSalary: e.operator?.base_salary == null ? null : Number(e.operator.base_salary),
         hourlyWage: (Number(e.operator?.base_salary) || 0) / OVERTIME_MONTHLY_HOURS,
         machineId: e.machine?.id ?? '',
-        machineNumber: e.machine?.machine_number ?? 'N/A',
+        machineNumber: e.machine ? `${e.machine.name} · ${e.machine.machine_number}` : 'N/A',
         entryDate: e.entry_date,
         ruleId: derived.ruleId,
         ruleName: derived.ruleName,

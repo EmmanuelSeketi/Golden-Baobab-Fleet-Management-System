@@ -10,7 +10,7 @@ import { MiniState, PageHeading } from '@/components/shared'
 type HourRow = {
   entry_date: string
   total_hours: number | null
-  machine: { machine_number: string } | null
+  machine: { name: string; machine_number: string } | null
 }
 type InvoiceRow = { billing_period_end: string; total_amount: number }
 
@@ -39,7 +39,7 @@ export function ReportsView({ role }: { role: UserRole }) {
     () =>
       supabase
         .from('daily_hour_entry')
-        .select('entry_date,total_hours,machine:machine_id(machine_number)')
+        .select('entry_date,total_hours,machine:machine_id(name,machine_number)')
         .gte('entry_date', since)
         .order('entry_date') as unknown as PromiseLike<{ data: HourRow[] | null; error: unknown }>,
     [since],
@@ -79,7 +79,7 @@ export function ReportsView({ role }: { role: UserRole }) {
   const topMachines = useMemo(() => {
     const map = new Map<string, number>()
     for (const h of hours.data ?? []) {
-      const key = h.machine?.machine_number ?? 'N/A'
+      const key = h.machine ? `${h.machine.name} · ${h.machine.machine_number}` : 'N/A'
       map.set(key, (map.get(key) ?? 0) + Number(h.total_hours ?? 0))
     }
     return Array.from(map.entries())
